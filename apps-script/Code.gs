@@ -1,0 +1,212 @@
+/**
+ * Gym Bulking Tracker — Google Sheets sync API (Google Apps Script web app).
+ *
+ * One sheet tab per entity. Column A is `id`. Every write is an upsert keyed by
+ * the id generated on the phone, so retries never create duplicate rows.
+ * Last write wins, compared on `updated_at`. Deleted records stay as rows with
+ * deleted = 1 so the deletion syncs to other devices.
+ *
+ * All requests are POSTs with a text/plain JSON body (avoids a CORS preflight):
+ *   { "token": "...", "action": "push", "changes": { "sets": [ {...}, ... ], ... } }
+ *   { "token": "...", "action": "pull", "since": "2026-11-18T10:00:00.000Z" }
+ *   { "token": "...", "action": "ping" }
+ *
+ * Setup: see README.md → "Google Sheets sync (Apps Script)".
+ */
+
+var ENTITIES = [
+  'exercises', 'day_types', 'template_exercises', 'splits', 'workouts',
+  'workout_exercises', 'sets', 'bodyweights', 'measurements', 'photos',
+  'foods', 'saved_meals', 'meals', 'food_logs', 'settings',
+];
+
+// Fields holding arrays/objects. They are stored as JSON text in the sheet.
+var JSON_FIELDS = {
+  splits: ['rotation'],
+  sets: ['pr_types'],
+  saved_meals: ['items'],
+  settings: ['value'],
+};
+
+var SYNCED_AT = '_synced_at';
+
+/** Run this once from the editor (Run ▶ setup). It creates the tabs and logs your token. */
+function setup() {
+  var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty('API_TOKEN');
+  if (!token) {
+    token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+    props.setProperty('API_TOKEN', token);
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ENTITIES.forEach(function (name) { getSheet_(ss, name); });
+  var first = ss.getSheetByName('Sheet1');
+  if (first && ss.getSheets().length > 1 && first.getLastRow() === 0) ss.deleteSheet(first);
+  Logger.log('Your API token (paste it into the app → Settings → Sync):\n\n' + token);
+}
+
+/** Run this if your token leaks. Then paste the new one into the app. */
+function rotateToken() {
+  PropertiesService.getScriptProperties().deleteProperty('API_TOKEN');
+  setup();
+}
+
+function doGet() {
+  return json_({ ok: true, message: 'Gym Bulking Tracker API is running. Use POST.' });
+}
+
+function doPost(e) {
+  try {
+    var body = JSON.parse(e.postData.contents);
+    var expected = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
+    if (!expected || body.token !== expected) return json_({ ok: false, error: 'unauthorized' });
+
+    var lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    try {
+      if (body.action === 'ping') return json_({ ok: true, server_time: new Date().toISOString() });
+      if (body.action === 'push') return json_(push_(body.changes || {}));
+      if (body.action === 'pull') return json_(pull_(body.since || ''));
+      return json_({ ok: false, error: 'unknown action' });
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message || err) });
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+function push_(changes) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var now = new Date().toISOString();
+  var result = { ok: true, server_time: now, applied: {}, skipped: {} };
+
+  Object.keys(changes).forEach(function (entity) {
+    if (ENTITIES.indexOf(entity) < 0) return;
+    var rows = changes[entity] || [];
+    if (!rows.length) return;
+    var sheet = getSheet_(ss, entity);
+    var tz = ss.getSpreadsheetTimeZone();
+
+    // Make sure every incoming field has a column.
+    var headers = readHeaders_(sheet);
+    rows.forEach(function (r) {
+      Object.keys(r).forEach(function (k) { if (headers.indexOf(k) < 0) headers.push(k); });
+    });
+    if (headers.indexOf(SYNCED_AT) < 0) headers.push(SYNCED_AT);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+
+    var lastRow = sheet.getLastRow();
+    var data = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, headers.length).getValues() : [];
+    var idCol = headers.indexOf('id');
+    var updCol = headers.indexOf('updated_at');
+    var index = {};
+    data.forEach(function (row, i) { index[String(row[idCol])] = i; });
+
+    var applied = 0, skipped = 0;
+    rows.forEach(function (r) {
+      if (!r.id) { skipped++; return; }
+      var at = index[r.id];
+      if (at !== undefined) {
+        var existing = normalize_(data[at][updCol], 'updated_at', tz);
+        if (existing && r.updated_at && existing > r.updated_at) { skipped++; return; } // newer copy already stored
+      }
+      var out = headers.map(function (h) {
+        if (h === SYNCED_AT) return now;
+        var v = r[h];
+        if (v === undefined) return at !== undefined ? data[at][headers.indexOf(h)] : '';
+        if (v === null) return '';
+        if (typeof v === 'object') return JSON.stringify(v);
+        return v;
+      });
+      if (at !== undefined) data[at] = out;
+      else { index[r.id] = data.length; data.push(out); }
+      applied++;
+    });
+
+    if (data.length) {
+      // Plain-text format stops Sheets from turning dates and ids into other types.
+      var range = sheet.getRange(2, 1, data.length, headers.length);
+      range.setNumberFormat('@');
+      range.setValues(data.map(function (row) { return row.map(function (v) { return typeof v === 'number' || typeof v === 'boolean' ? String(v) : v; }); }));
+    }
+    result.applied[entity] = applied;
+    result.skipped[entity] = skipped;
+  });
+  return result;
+}
+
+function pull_(since) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ss.getSpreadsheetTimeZone();
+  var serverTime = new Date().toISOString();
+  var out = {};
+  ENTITIES.forEach(function (entity) {
+    var sheet = ss.getSheetByName(entity);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    var headers = readHeaders_(sheet);
+    var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+    var syncedCol = headers.indexOf(SYNCED_AT);
+    var jsonFields = JSON_FIELDS[entity] || [];
+    var rows = [];
+    values.forEach(function (row) {
+      var synced = normalize_(row[syncedCol], SYNCED_AT, tz);
+      if (since && synced && synced <= since) return;
+      var obj = {};
+      headers.forEach(function (h, i) {
+        if (h === SYNCED_AT || !h) return;
+        obj[h] = decode_(normalize_(row[i], h, tz), h, jsonFields);
+      });
+      if (obj.id) rows.push(obj);
+    });
+    if (rows.length) out[entity] = rows;
+  });
+  return { ok: true, server_time: serverTime, changes: out };
+}
+
+// ---------------------------------------------------------------------------
+
+function getSheet_(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, 5).setValues([['id', 'created_at', 'updated_at', 'deleted', SYNCED_AT]]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function readHeaders_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return ['id'];
+  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String).filter(function (h) { return h !== ''; });
+}
+
+/** Undo any type conversion Sheets did (e.g. dates typed into cells by hand). */
+function normalize_(v, field, tz) {
+  if (v instanceof Date) {
+    return field === 'date' ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v.toISOString();
+  }
+  return v;
+}
+
+var NUMERIC = /^-?\d+(\.\d+)?$/;
+var TEXT_FIELDS = ['id', 'name', 'note', 'notes', 'label', 'serving_label', 'date', 'site', 'icon', 'color', 'drive_file_id'];
+
+function decode_(v, field, jsonFields) {
+  if (v === '' || v === null || v === undefined) return null;
+  if (jsonFields.indexOf(field) >= 0) {
+    try { return JSON.parse(v); } catch (e) { return v; }
+  }
+  if (typeof v === 'string' && TEXT_FIELDS.indexOf(field) < 0 && !/_id$/.test(field) && NUMERIC.test(v)) return Number(v);
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return v;
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}

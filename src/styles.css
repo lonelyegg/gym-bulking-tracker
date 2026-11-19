@@ -263,3 +263,17 @@ main.in-workout { padding-bottom: calc(40px + var(--safe-bottom)); }
 .toast { max-width: calc(100% - 32px); background: var(--surface-3); color: var(--text); padding: 12px 16px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.5); animation: drop .25s ease-out; }
 .toast.pr { background: linear-gradient(135deg, #fcd34d, #f59e0b); color: #3a2a00; }
 @keyframes drop { from { transform: translateY(-20px); opacity: 0; } }
+
+/* ---------- sync ---------- */
+.sync-chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.sync-chip.ok { color: var(--accent); }
+.sync-chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.sync-chip.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); }
+.sync-line { font-weight: 600; padding: 2px 0 4px; }
+.sync-line.ok { color: var(--accent); }
+.sync-line.warn { color: var(--warn); }
+.sync-line.bad { color: var(--danger); }
+.sync-line.muted { color: var(--muted); }
+.btn:disabled { opacity: .45; pointer-events: none; }
+.more { margin-top: 10px; }
+.more summary { min-height: 44px; display: flex; align-items: center; color: var(--blue); font-weight: 600; cursor: pointer; }

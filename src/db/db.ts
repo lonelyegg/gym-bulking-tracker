@@ -54,7 +54,19 @@ export class GymDB extends Dexie {
 export const db = new GymDB();
 
 export const nowIso = () => new Date().toISOString();
+
+// Sync listens here so a change on the phone can be pushed shortly afterwards.
+const changeListeners = new Set<() => void>();
+export function onLocalChange(fn: () => void): () => void {
+  changeListeners.add(fn);
+  return () => changeListeners.delete(fn);
+}
+const changed = () => changeListeners.forEach((fn) => { try { fn(); } catch { /* ignore */ } });
 export const uuid = () => crypto.randomUUID();
+
+/** An outbox row saying "this record needs uploading". */
+export const outboxEntry = (entity: EntityName, id: string, queued_at: string): OutboxEntry =>
+  ({ key: `${entity}:${id}`, entity, id, queued_at, rev: crypto.randomUUID() });
 
 type NewRecord<T extends Base> = Omit<T, 'id' | 'created_at' | 'updated_at' | 'deleted'> & Partial<Base>;
 
@@ -70,8 +82,9 @@ export async function put<E extends EntityName>(entity: E, ...records: NewRecord
   })) as EntityMap[E][];
   await db.transaction('rw', db.table(entity), db.outbox, async () => {
     await db.table(entity).bulkPut(full);
-    await db.outbox.bulkPut(full.map((r) => ({ key: `${entity}:${r.id}`, entity, id: r.id, queued_at: ts })));
+    await db.outbox.bulkPut(full.map((r) => outboxEntry(entity, r.id, ts)));
   });
+  changed();
   return full;
 }
 
@@ -82,8 +95,9 @@ export async function patch<E extends EntityName>(entity: E, id: string, changes
     if (!cur) return;
     const ts = nowIso();
     await db.table(entity).put({ ...cur, ...changes, updated_at: ts });
-    await db.outbox.put({ key: `${entity}:${id}`, entity, id, queued_at: ts });
+    await db.outbox.put(outboxEntry(entity, id, ts));
   });
+  changed();
 }
 
 /** Mark records deleted (kept as tombstones so the deletion syncs). */
@@ -95,9 +109,10 @@ export async function softDelete(entity: EntityName, ids: string[]): Promise<voi
       const cur = await db.table(entity).get(id);
       if (!cur) continue;
       await db.table(entity).put({ ...cur, deleted: 1, updated_at: ts });
-      await db.outbox.put({ key: `${entity}:${id}`, entity, id, queued_at: ts });
+      await db.outbox.put(outboxEntry(entity, id, ts));
     }
   });
+  changed();
 }
 
 /** Remove records that were never synced (e.g. parts of an active workout). */

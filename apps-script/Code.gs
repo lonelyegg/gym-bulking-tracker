@@ -29,6 +29,7 @@ var JSON_FIELDS = {
 };
 
 var SYNCED_AT = '_synced_at';
+var API_VERSION = 2; // the app checks this, so it can tell you when the script is out of date
 
 /** Run this once from the editor (Run ▶ setup). It creates the tabs and logs your token. */
 function setup() {
@@ -64,7 +65,7 @@ function doPost(e) {
     var lock = LockService.getScriptLock();
     lock.waitLock(25000);
     try {
-      if (body.action === 'ping') return json_({ ok: true, server_time: new Date().toISOString() });
+      if (body.action === 'ping') return json_({ ok: true, api_version: API_VERSION, server_time: new Date().toISOString() });
       if (body.action === 'push') return json_(push_(body.changes || {}));
       if (body.action === 'pull') return json_(pull_(body.since || ''));
       return json_({ ok: false, error: 'unknown action' });
@@ -80,6 +81,7 @@ function doPost(e) {
 
 function push_(changes) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ss.getSpreadsheetTimeZone();
   var now = new Date().toISOString();
   var result = { ok: true, server_time: now, applied: {}, skipped: {} };
 
@@ -88,55 +90,82 @@ function push_(changes) {
     var rows = changes[entity] || [];
     if (!rows.length) return;
     var sheet = getSheet_(ss, entity);
-    var tz = ss.getSpreadsheetTimeZone();
+    var jsonFields = JSON_FIELDS[entity] || [];
 
     // Make sure every incoming field has a column.
     var headers = readHeaders_(sheet);
+    var headersChanged = false;
     rows.forEach(function (r) {
-      Object.keys(r).forEach(function (k) { if (headers.indexOf(k) < 0) headers.push(k); });
+      Object.keys(r || {}).forEach(function (k) {
+        if (headers.indexOf(k) < 0) { headers.push(k); headersChanged = true; }
+      });
     });
-    if (headers.indexOf(SYNCED_AT) < 0) headers.push(SYNCED_AT);
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-    sheet.setFrozenRows(1);
+    if (headers.indexOf(SYNCED_AT) < 0) { headers.push(SYNCED_AT); headersChanged = true; }
+    if (headersChanged) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
 
+    var width = headers.length;
     var lastRow = sheet.getLastRow();
-    var data = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, headers.length).getValues() : [];
+    var data = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, width).getValues() : [];
+    var originalCount = data.length;
     var idCol = headers.indexOf('id');
     var updCol = headers.indexOf('updated_at');
     var index = {};
     data.forEach(function (row, i) { index[String(row[idCol])] = i; });
 
+    var changed = {};
+    var changedCount = 0;
     var applied = 0, skipped = 0;
     rows.forEach(function (r) {
-      if (!r.id) { skipped++; return; }
+      if (!r || !r.id) { skipped++; return; }
       var at = index[r.id];
       if (at !== undefined) {
         var existing = normalize_(data[at][updCol], 'updated_at', tz);
-        if (existing && r.updated_at && existing > r.updated_at) { skipped++; return; } // newer copy already stored
+        if (existing && r.updated_at && existing > r.updated_at) { skipped++; return; } // a newer copy is already stored
       }
-      var out = headers.map(function (h) {
+      var out = headers.map(function (h, c) {
         if (h === SYNCED_AT) return now;
         var v = r[h];
-        if (v === undefined) return at !== undefined ? data[at][headers.indexOf(h)] : '';
+        if (v === undefined) return at !== undefined ? data[at][c] : '';   // keep columns the app doesn't know about
+        if (jsonFields.indexOf(h) >= 0) return JSON.stringify(v === undefined ? null : v);
         if (v === null) return '';
         if (typeof v === 'object') return JSON.stringify(v);
         return v;
       });
-      if (at !== undefined) data[at] = out;
-      else { index[r.id] = data.length; data.push(out); }
+      if (at !== undefined) {
+        data[at] = out;
+        if (at < originalCount && !changed[at]) { changed[at] = true; changedCount++; }
+      } else {
+        index[r.id] = data.length;
+        data.push(out);
+      }
       applied++;
     });
 
-    if (data.length) {
-      // Plain-text format stops Sheets from turning dates and ids into other types.
-      var range = sheet.getRange(2, 1, data.length, headers.length);
-      range.setNumberFormat('@');
-      range.setValues(data.map(function (row) { return row.map(function (v) { return typeof v === 'number' || typeof v === 'boolean' ? String(v) : v; }); }));
+    // Write only what changed. A few edited rows are written one by one; many, as one block.
+    if (changedCount > 25) {
+      writeRows_(sheet, 2, data.slice(0, originalCount), width);
+    } else {
+      Object.keys(changed).forEach(function (i) { writeRows_(sheet, 2 + Number(i), [data[i]], width); });
     }
+    writeRows_(sheet, 2 + originalCount, data.slice(originalCount), width);
+
     result.applied[entity] = applied;
     result.skipped[entity] = skipped;
   });
   return result;
+}
+
+/** Plain-text format stops Sheets turning ids, dates and "=..." notes into other types. */
+function writeRows_(sheet, startRow, rows, width) {
+  if (!rows.length) return;
+  var range = sheet.getRange(startRow, 1, rows.length, width);
+  range.setNumberFormat('@');
+  range.setValues(rows.map(function (row) {
+    return row.map(function (v) { return typeof v === 'number' || typeof v === 'boolean' ? String(v) : v; });
+  }));
 }
 
 function pull_(since) {
@@ -154,7 +183,7 @@ function pull_(since) {
     var rows = [];
     values.forEach(function (row) {
       var synced = normalize_(row[syncedCol], SYNCED_AT, tz);
-      if (since && synced && synced <= since) return;
+      if (since && synced && synced < since) return; // '<' not '<=': a row stamped in the same millisecond as the last pull is sent again (harmless)
       var obj = {};
       headers.forEach(function (h, i) {
         if (h === SYNCED_AT || !h) return;

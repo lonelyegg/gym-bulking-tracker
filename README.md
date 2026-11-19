@@ -2,12 +2,12 @@
 
 A personal, free, phone-first workout and bulking tracker. It's an installable web app (PWA) that works offline and keeps your data on your phone, with optional backup to your own Google Sheet.
 
-**Status: Phase 1 (gym-ready MVP).**
+**Status: Phase 2 (sync and backup).**
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Templates, workout logging, rest timer, local storage, install + offline | ✅ this release |
-| 2 | Google Sheets sync via Apps Script, JSON export/import | next |
+| 1 | Templates, workout logging, rest timer, local storage, install + offline | ✅ |
+| 2 | Google Sheets sync via Apps Script, JSON export/import | ✅ this release |
 | 3 | Dashboard: icon calendar, streak, PRs, e1RM charts, rest stats | |
 | 4 | Bodyweight, measurements, food log (with meal start/finish times), bulk check | |
 | 5 | Progress photos | |
@@ -53,9 +53,17 @@ The app is built around what iOS allows a web app to do. Here's the honest versi
 
 ## Where your data lives
 
-Everything is stored on your phone in IndexedDB. Nothing waits on the network. The app asks iOS to protect the data from automatic clearing, and home-screen apps aren't subject to Safari's 7-day storage cleanup. **Deleting the app from the home screen deletes its data.** Phase 2 adds Google Sheets backup and JSON export.
+Everything is stored on your phone in IndexedDB, and nothing waits on the network. The app asks iOS to protect the data from automatic clearing, and home-screen apps aren't subject to Safari's 7-day storage cleanup. **Deleting the app from the home screen deletes its data**, so set up sync (below) or export a backup now and then.
 
-Every change is already being queued in a local outbox (the count is shown in Settings), so when sync arrives in Phase 2, everything you've logged since day one will upload.
+## Sync and backup (Phase 2)
+
+- **Google Sheets sync (recommended).** Your phone stays the source of truth. Changes are queued and uploaded in the background, so retries are safe and never duplicate rows. Sync runs on launch, when you return to the app, when you come back online, every 5 minutes, and a few seconds after you finish a workout. **It never runs during a workout.** A workout in progress is uploaded when you finish it.
+- **Status.** The chip at the top of Home shows ☁️ Synced / N waiting / Offline / ⚠️ Sync problem. Settings → Google Sheets sync has **Sync now** and the details.
+- **New phone or lost data.** Install the app, go to Settings, paste the URL and token, tap **Connect**. Everything is downloaded back. Seed exercises and presets never duplicate.
+- **Conflicts.** For each record the **newest** `updated_at` wins. If you edit the same thing on two devices while offline, the later edit wins.
+- **Backup file.** Settings → **Export backup** saves one JSON file with everything (on iPhone, choose **Save to Files** in the share sheet). **Import backup…** merges a file into the phone: the newest copy of each record wins, so importing never loses newer data. Imported records are also uploaded to the Sheet. The backup never contains your sync URL or token.
+- **Backup reminder.** If you have 3 or more workouts, no sync and no backup in 14 days, Home shows a small reminder (you can snooze it).
+- **Advanced** (Settings → Google Sheets sync → Advanced): re-download everything from the Sheet, re-upload everything to it, or disconnect. Connecting to a *different* Sheet automatically re-uploads everything to it.
 
 ---
 
@@ -76,7 +84,7 @@ Open the URL it prints (`http://localhost:5173/gym-bulking-tracker/`). `--host` 
 Other commands:
 
 ```bash
-npm test          # unit tests for the training logic (progression, PRs, rotation)
+npm test          # training logic, plus sync/backup tested against the real Apps Script code
 ```
 
 ```bash
@@ -101,8 +109,11 @@ src/
   state/device.ts     beep (Web Audio + audioSession), wake lock, notifications
   screens/            Home, Workout, History/Summary, Plan editors, Settings
   components/         sheet, stepper, RIR picker, timer panel, exercise picker
-apps-script/Code.gs   Google Sheets API (used from Phase 2)
-tests/                vitest unit tests
+  sync/sync.ts        push/pull engine, connect, automatic sync
+  sync/merge.ts       newest-wins merging (used by pull and import)
+  sync/backup.ts      JSON export/import
+apps-script/Code.gs   Google Sheets API
+tests/                vitest tests (sync tests run the real Code.gs against a fake Sheets API)
 ```
 
 ---
@@ -139,8 +150,6 @@ If you name the repo something else, nothing needs changing: the workflow uses t
 
 ## Google Sheets sync (Apps Script)
 
-The app side of sync lands in **Phase 2**. The script is ready now, so you can set it up ahead of time.
-
 ### Why a token?
 
 An Apps Script web app deployed with access set to "Anyone" accepts requests from anyone who knows the URL. The script rejects every request that doesn't carry your secret token. Requests are sent as `text/plain` POSTs, which avoids a CORS preflight that Apps Script can't answer.
@@ -159,9 +168,11 @@ An Apps Script web app deployed with access set to "Anyone" accepts requests fro
    - Execute as: **Me**
    - Who has access: **Anyone**
    - Click **Deploy** and copy the **Web app URL** (ends in `/exec`).
-6. **Connect the app (Phase 2):** in the app, go to **Settings → Sync**, paste the **URL** and **token**, and tap **Test connection**.
+6. **Connect the app:** in the app, go to **Settings → Google Sheets sync**, paste the **URL** and the **token**, and tap **Connect**. It tests the connection, saves it and runs the first sync. After a few seconds the tabs in your Sheet fill up.
 
 **Check it works:** open the Web app URL in a browser. You should see `{"ok":true,"message":"Gym Bulking Tracker API is running. Use POST."}`.
+
+**If the app says your script is “out of date”:** paste the latest `apps-script/Code.gs` over the old one, then do the “edit the script later” steps below (a *new version* of the same deployment).
 
 **If you edit the script later:** use **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**. This keeps the same URL. ("New deployment" would create a different URL.)
 
@@ -172,8 +183,10 @@ An Apps Script web app deployed with access set to "Anyone" accepts requests fro
 - Each change is pushed as an upsert keyed by the phone-generated `id`, so retrying is always safe.
 - Last write wins, compared on `updated_at`. Deletions are kept as rows with `deleted = 1`.
 - Each row gets a `_synced_at` server timestamp, and the app pulls "rows changed since X". Restoring onto a new phone is a full pull.
+- Only changed rows are written, and everything is stored as plain text, so Sheets can't turn dates or notes into other types.
+- The script keeps any extra columns you add to the right of the data.
 - Arrays such as split rotations and PR types are stored as JSON text in the cell.
-- Please don't reorder or rename columns. Adding your own columns to the right is fine.
+- Please don't reorder, rename or delete the existing columns, and don't edit rows by hand while the app might sync (your edit would be overwritten by the phone's copy if the phone's `updated_at` is newer). Adding your own columns to the right is fine.
 
 ---
 
@@ -199,7 +212,7 @@ Every synced record has `id` (uuid), `created_at`, `updated_at` (ISO, UTC) and `
 | food_logs | date, meal_id, food_id, amount, unit, kcal, protein_g, carbs_g, fat_g (copied at log time) *(Phase 4)* |
 | settings | one row per setting: id = key, value (JSON) |
 
-Local only (never synced): `outbox` (pending changes), `local` (rest timer state; later the sync URL and token).
+Local only (never synced or exported): `outbox` (pending changes), `local` (rest timer state, the sync URL and token, sync cursor).
 
 Seed records (starter exercises, presets) use fixed ids like `ex-barbell-bench-press` and a year-2000 timestamp, so restoring from the Sheet never duplicates them and your edits always win.
 
@@ -209,3 +222,7 @@ Seed records (starter exercises, presets) use fixed ids like `ex-barbell-bench-p
 - **Screen turned off mid-workout:** check that **Keep screen on** is enabled (workout ⋯ menu or Settings). iOS drops the lock when you leave the app, and the app takes it back when you return.
 - **Old version after an update:** close the app fully (swipe it away) and reopen it.
 - **Data missing after installing:** the home-screen app's storage is separate from Safari's (see above).
+- **“Wrong token”:** copy the token again from the Apps Script **Execution log** after running `setup`. Or run `rotateToken` and use the new one.
+- **“Unexpected reply from Google”:** the web app isn't deployed with **Who has access: Anyone**, or you used the `/dev` URL. Redeploy and use the `/exec` URL.
+- **“Couldn't reach Google”:** you're offline, or the URL is wrong. The app keeps working and will retry.
+- **Sync says “N waiting” and doesn't go down:** tap **Sync now** in Settings and read the message. Nothing is lost: changes stay queued until Google confirms them.

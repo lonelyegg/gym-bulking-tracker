@@ -1,10 +1,12 @@
 import { useState } from 'preact/hooks';
-import { alive, db, useLive } from '../db/db';
+import { alive, db, getLocal, setLocal, useLive } from '../db/db';
 import type { DayType } from '../db/schema';
 import { fmtDuration, localDate, weekStart } from '../lib/logic';
 import { settings } from '../state/settings';
 import { computeNextUp, doneWorkouts, getActiveWorkout, startWorkout } from '../state/workout';
 import { go, Sheet } from '../components/ui';
+import { isConfigured } from '../sync/sync';
+import { SyncChip } from './SyncSettings';
 
 export function HomeScreen() {
   const active = useLive(async () => (await getActiveWorkout()) ?? null, []);
@@ -18,6 +20,13 @@ export function HomeScreen() {
     return m;
   }, []) ?? {};
   const [choose, setChoose] = useState(false);
+  const lastBackup = useLive(() => getLocal<string>('last_backup_at', ''), []);
+  const snoozeUntil = useLive(() => getLocal<string>('backup_nudge_until', ''), []);
+  const [snoozed, setSnoozed] = useState(false);
+  const needsBackup = lastBackup !== undefined && snoozeUntil !== undefined && !snoozed && !isConfigured()
+    && workouts.length >= 3
+    && (!lastBackup || Date.now() - Date.parse(lastBackup) > 14 * 86400000)
+    && (!snoozeUntil || Date.now() > Date.parse(snoozeUntil));
 
   const dt = (id?: string) => dayTypes.find((d) => d.id === id);
   const start = async (dayTypeId: string | null, suggestedIndex?: number) => {
@@ -79,12 +88,29 @@ export function HomeScreen() {
   return (
     <div class="page">
       <header class="home-head">
-        <div class="muted small">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+        <div class="row between">
+          <div class="muted small">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+          <SyncChip />
+        </div>
         <h1>Let's grow 💪</h1>
       </header>
 
       {card}
       {!active && <button class="btn ghost block" onClick={() => setChoose(true)}>Choose a different workout</button>}
+
+      {needsBackup && (
+        <section class="card warn-card">
+          <div class="bold">Back up your training log</div>
+          <div class="small">It only exists on this phone. Connect your Google Sheet, or export a backup file.</div>
+          <div class="row gap mt">
+            <button class="btn sm primary" onClick={() => go('/settings')}>Set up backup</button>
+            <button class="btn sm ghost" onClick={async () => {
+              setSnoozed(true);
+              await setLocal('backup_nudge_until', new Date(Date.now() + 7 * 86400000).toISOString());
+            }}>Not now</button>
+          </div>
+        </section>
+      )}
 
       <section class="card">
         <div class="row between">

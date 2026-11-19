@@ -208,6 +208,8 @@ export interface OutboxEntry {
   entity: EntityName;
   id: string;
   queued_at: string;
+  /** Random per write. Lets sync tell that a record changed again while it was being uploaded. */
+  rev?: string;
 }
 
 /** Local-only key/value store (timer state, sync URL + token, ...). */

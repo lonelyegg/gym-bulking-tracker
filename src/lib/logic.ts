@@ -193,3 +193,13 @@ export function fmtDuration(ms: number): string {
 export const fmtKg = (n: number | null | undefined) => (n == null ? '–' : `${round1(n)}`.replace(/\.0$/, ''));
 
 export const fmtRir = (r: number | null | undefined) => (r == null ? '–' : r >= 4 ? '4+' : String(r));
+
+/** "just now", "5 min ago", "3 h ago", or a date. */
+export function fmtAgo(iso: string | null | undefined, nowMs = Date.now()): string {
+  if (!iso) return 'never';
+  const min = Math.floor((nowMs - Date.parse(iso)) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 60 * 24) return `${Math.floor(min / 60)} h ago`;
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}

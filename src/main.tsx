@@ -6,6 +6,7 @@ import { loadSettings } from './state/settings';
 import { restoreTimer } from './state/timer';
 import { requestPersistentStorage, setWakeLock } from './state/device';
 import { getActiveWorkout } from './state/workout';
+import { loadSyncConfig, startAutoSync } from './sync/sync';
 import { go } from './components/ui';
 import './styles.css';
 
@@ -13,6 +14,7 @@ async function boot() {
   await seedIfEmpty();
   const s = await loadSettings();
   await restoreTimer();
+  await loadSyncConfig();
   requestPersistentStorage();
   const active = await getActiveWorkout();
   if (active) {
@@ -21,6 +23,7 @@ async function boot() {
     if (!location.hash || location.hash === '#/' ) go('/workout');
   }
   render(<App />, document.getElementById('app')!);
+  startAutoSync();
 }
 
 registerSW({ immediate: true });

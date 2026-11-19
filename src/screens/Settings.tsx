@@ -1,5 +1,4 @@
 import { useState } from 'preact/hooks';
-import { db, useLive } from '../db/db';
 import { fmtClock } from '../lib/logic';
 import { saveSetting, settings, type BeepMode } from '../state/settings';
 import {
@@ -7,11 +6,11 @@ import {
   unlockAudio, wakeLockSupported,
 } from '../state/device';
 import { Header, Stepper, Toggle, toast } from '../components/ui';
+import { BackupSection, SyncSection } from './SyncSettings';
 
 export function SettingsScreen() {
   const s = settings.value;
   const [ladder, setLadder] = useState(s.dumbbell_ladder.join(', '));
-  const pending = useLive(() => db.outbox.count(), []);
   const standalone = isStandalone();
 
   const saveLadder = () => {
@@ -85,10 +84,12 @@ export function SettingsScreen() {
         <p class="muted small">Overload hints for dumbbell exercises suggest the next weight on this list. Machines and cables use each exercise’s weight jump (edit in Plan → Exercise library).</p>
       </section>
 
-      <h3 class="section-title">Data</h3>
+      <SyncSection />
+      <BackupSection />
+
+      <h3 class="section-title">Storage</h3>
       <section class="card small">
         <div>Stored on this phone (IndexedDB). {storagePersisted.value ? 'Protected from automatic clearing ✓' : 'Persistence not granted yet.'}</div>
-        <div class="muted">{pending ?? 0} changes waiting to sync. Google Sheets sync and JSON backup arrive in Phase 2.</div>
       </section>
       <p class="muted small center-text">Gym Bulking Tracker · v{__APP_VERSION__}</p>
       <div class="bottom-space" />

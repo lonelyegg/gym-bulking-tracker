@@ -170,3 +170,46 @@ export function Header(props: { title: ComponentChildren; back?: boolean | strin
 
 export const DAY_ICONS = ['🏋️', '💪', '🦵', '🦿', '🧗', '🔥', '⚡', '🌟', '🛡️', '🦅', '🎯', '🍑', '🦍', '🐂', '🚀', '🏃', '🧘', '🥇', '❤️', '🔱'];
 export const DAY_COLORS = ['#ef6c57', '#f4a259', '#ffd166', '#7bd389', '#06d6a0', '#5fbfa0', '#4ea8de', '#118ab2', '#8ecae6', '#9b5de5', '#c77dff', '#e5989b', '#ef476f', '#fb8500', '#8b93a7'];
+
+/** Large iOS-style page title for the main tabs. */
+export function PageTitle(props: { title: ComponentChildren; sub?: ComponentChildren; right?: ComponentChildren }) {
+  return (
+    <header class="page-title">
+      <div class="grow">
+        {props.sub && <div class="page-sub">{props.sub}</div>}
+        <h1>{props.title}</h1>
+      </div>
+      {props.right}
+    </header>
+  );
+}
+
+/** Dashboard card with a coloured category header, like the Health app. Tapping the header opens more. */
+export function Section(props: {
+  title: string; icon?: ComponentChildren; tone?: string; more?: string; onMore?: () => void; children: ComponentChildren;
+}) {
+  const head = (
+    <>
+      <span class="section-head-title" style={{ color: props.tone }}>{props.icon}{props.title}</span>
+      {props.onMore && <span class="section-head-more">{props.more ?? ''}<span class="chev">›</span></span>}
+    </>
+  );
+  return (
+    <section class="card dash-card">
+      {props.onMore
+        ? <button class="section-head" onClick={props.onMore}>{head}</button>
+        : <div class="section-head">{head}</div>}
+      {props.children}
+    </section>
+  );
+}
+
+export function Segmented<T extends string>(props: { value: T; options: readonly T[]; onChange: (v: T) => void; label: string }) {
+  return (
+    <div class="segmented" role="radiogroup" aria-label={props.label}>
+      {props.options.map((o) => (
+        <button key={o} role="radio" aria-checked={props.value === o} class={props.value === o ? 'on' : ''} onClick={() => props.onChange(o)}>{o}</button>
+      ))}
+    </div>
+  );
+}

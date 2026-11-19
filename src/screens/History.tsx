@@ -1,50 +1,105 @@
+import { signal } from '@preact/signals';
+import { useMemo } from 'preact/hooks';
 import { db, useLive } from '../db/db';
-import { fmtClock, fmtDuration, fmtKg, fmtRir, PR_LABEL } from '../lib/logic';
-import { deleteWorkout, doneWorkouts, summarize } from '../state/workout';
-import { confirmSheet, go, Header } from '../components/ui';
+import { fmtClock, fmtDuration, fmtKg, fmtRir, localDate, PR_LABEL } from '../lib/logic';
+import { prEvents, workoutsByDate } from '../lib/stats';
+import { useTraining } from '../state/training';
+import { deleteWorkout, summarize } from '../state/workout';
+import { MonthCalendar, monthLabel } from '../components/Calendar';
+import { IconChevron } from '../components/icons';
+import { fmtDay, PrRow } from '../components/PrRow';
+import { confirmSheet, go, Header, PageTitle } from '../components/ui';
+
+/** Kept across navigation, so coming back from a workout returns to the same month. */
+export const historyMonth = signal(localDate().slice(0, 7));
 
 export function HistoryScreen() {
-  const workouts = useLive(doneWorkouts, []);
-  const stats = useLive(async () => {
-    const m: Record<string, { sets: number; prs: number }> = {};
-    for (const s of await db.sets.toArray()) {
-      if (s.deleted || !s.completed_at || s.is_warmup) continue;
-      const x = (m[s.workout_id] ??= { sets: 0, prs: 0 });
-      x.sets++;
-      if (s.pr_types?.length) x.prs++;
-    }
+  const data = useTraining();
+  const month = historyMonth.value;
+  const byDate = useMemo(() => (data ? workoutsByDate(data.workouts) : new Map()), [data]);
+  const prCount = useMemo(() => {
+    const m = new Map<string, number>();
+    if (data) for (const e of prEvents(data.workouts, data.sets)) m.set(e.workoutId, (m.get(e.workoutId) ?? 0) + 1);
     return m;
-  }, []) ?? {};
+  }, [data]);
+  if (!data) return <div class="page" />;
 
-  if (!workouts) return <div class="page" />;
-  const byMonth = new Map<string, typeof workouts>();
-  for (const w of workouts) {
-    const k = new Date(w.started_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    byMonth.set(k, [...(byMonth.get(k) ?? []), w]);
+  const list = data.workouts.filter((w) => localDate(w.started_at).startsWith(month)).reverse();
+  const ids = new Set(list.map((w) => w.id));
+  const working = data.sets.filter((x) => ids.has(x.workout_id) && !x.is_warmup);
+  const perWorkout = new Map<string, { sets: number; volume: number }>();
+  for (const x of working) {
+    const v = perWorkout.get(x.workout_id) ?? { sets: 0, volume: 0 };
+    v.sets++;
+    v.volume += x.weight_kg * x.reps;
+    perWorkout.set(x.workout_id, v);
+  }
+  const totalMs = list.reduce((a, w) => a + (w.ended_at ? Date.parse(w.ended_at) - Date.parse(w.started_at) : 0), 0);
+  const volume = working.reduce((a, x) => a + x.weight_kg * x.reps, 0);
+  const first = data.workouts[0] ? localDate(data.workouts[0].started_at).slice(0, 7) : month;
+
+  return (
+    <div class="page">
+      <PageTitle title="History" />
+      <section class="card">
+        <MonthCalendar month={month} onMonth={(m) => (historyMonth.value = m)} byDate={byDate} minMonth={first < month ? first : month} size="large" />
+      </section>
+
+      <div class="stat-grid three">
+        <div class="stat"><div class="stat-value">{list.length}</div><div class="muted small">Sessions</div></div>
+        <div class="stat"><div class="stat-value">{totalMs ? fmtDuration(totalMs).replace(' min', 'm').replace(' h ', 'h ') : '–'}</div><div class="muted small">Time</div></div>
+        <div class="stat"><div class="stat-value">{volume ? `${(volume / 1000).toFixed(volume >= 100000 ? 0 : 1)}k` : '–'}</div><div class="muted small">kg lifted</div></div>
+      </div>
+
+      <h3 class="section-title">{monthLabel(month)}</h3>
+      {!list.length && <p class="empty">No workouts this month.</p>}
+      {list.map((w) => {
+        const st = perWorkout.get(w.id);
+        const prs = prCount.get(w.id) ?? 0;
+        return (
+          <button key={w.id} class="list-item" onClick={() => go(`/w/${w.id}`)}>
+            <span class="day-dot" style={{ background: w.color }}>{w.icon}</span>
+            <span class="grow left">
+              <span class="block bold">{w.name}</span>
+              <span class="block muted small">
+                {fmtDay(w.started_at)}
+                {w.ended_at && ` · ${fmtDuration(Date.parse(w.ended_at) - Date.parse(w.started_at))}`}
+                {` · ${st?.sets ?? 0} sets`}
+                {st?.volume ? ` · ${Math.round(st.volume).toLocaleString()} kg` : ''}
+              </span>
+            </span>
+            {prs > 0 && <span class="pr-pill">🏆 {prs}</span>}
+            <IconChevron class="muted" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Every record, newest first, grouped by month. */
+export function PrsScreen() {
+  const data = useTraining();
+  const events = useMemo(() => (data ? prEvents(data.workouts, data.sets) : []), [data]);
+  if (!data) return <div class="page" />;
+  const byMonth = new Map<string, typeof events>();
+  for (const e of events) {
+    const k = localDate(e.date).slice(0, 7);
+    byMonth.set(k, [...(byMonth.get(k) ?? []), e]);
   }
   return (
     <div class="page">
-      <Header title="History" />
-      {!workouts.length && <p class="empty">No finished workouts yet.</p>}
-      {[...byMonth].map(([month, list]) => (
-        <section key={month}>
-          <h3 class="section-title">{month}</h3>
-          {list.map((w) => (
-            <button key={w.id} class="list-item" onClick={() => go(`/w/${w.id}`)}>
-              <span class="day-dot" style={{ background: w.color }}>{w.icon}</span>
-              <span class="grow left">
-                <span class="block bold">{w.name}</span>
-                <span class="block muted small">
-                  {new Date(w.started_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
-                  {w.ended_at && ` · ${fmtDuration(Date.parse(w.ended_at) - Date.parse(w.started_at))}`}
-                  {` · ${stats[w.id]?.sets ?? 0} sets`}
-                </span>
-              </span>
-              {(stats[w.id]?.prs ?? 0) > 0 && <span class="pr-pill">🏆 {stats[w.id].prs}</span>}
-            </button>
-          ))}
+      <Header title="Personal records" back="/" />
+      {!events.length && <p class="empty">No records yet. They start from your second session of an exercise.</p>}
+      {[...byMonth].map(([m, list]) => (
+        <section key={m}>
+          <h3 class="section-title">{monthLabel(m)} · {list.length}</h3>
+          <section class="card dash-card">
+            {list.map((e) => <PrRow key={`${e.workoutId}-${e.exerciseId}`} e={e} exercise={data.exercises.get(e.exerciseId)} />)}
+          </section>
         </section>
       ))}
+      <div class="bottom-space" />
     </div>
   );
 }
@@ -56,7 +111,7 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
   if (!w || !s) return <div class="page" />;
   return (
     <div class="page">
-      <Header title={w.name} back="/" />
+      <Header title={w.name} back />
       <section class="summary-hero" style={{ '--c': w.color }}>
         <div class="today-icon">{w.icon}</div>
         <div>

@@ -8,7 +8,7 @@ import { fmtClock, fmtRir } from '../lib/logic';
 import { saveSetting, settings } from '../state/settings';
 import { ExercisePicker, muscleLabel } from '../components/ExercisePicker';
 import {
-  confirmSheet, DAY_COLORS, DAY_ICONS, go, Header, RirPicker, Sheet, Stepper, toast,
+  confirmSheet, DAY_COLORS, DAY_ICONS, go, Header, PageTitle, RirPicker, Sheet, Stepper, toast,
 } from '../components/ui';
 
 const liveDayTypes = async () => (await db.day_types.toArray()).filter((d) => !d.deleted).sort((a, b) => a.name.localeCompare(b.name));
@@ -32,7 +32,7 @@ export function PlanScreen() {
 
   return (
     <div class="page">
-      <Header title="Plan" />
+      <PageTitle title="Plan" />
       <section class="card">
         <div class="row between center">
           <span class="bold">Sessions per week</span>

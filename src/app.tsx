@@ -4,7 +4,8 @@ import { ConfirmHost, go, route, Toasts } from './components/ui';
 import { MiniBar } from './components/timer';
 import { HomeScreen } from './screens/Home';
 import { WorkoutScreen } from './screens/Workout';
-import { HistoryScreen, WorkoutDetailScreen } from './screens/History';
+import { HistoryScreen, PrsScreen, WorkoutDetailScreen } from './screens/History';
+import { IconCalendar, IconDumbbell, IconGear, IconHome } from './components/icons';
 import {
   DayTypeEditorScreen, ExerciseEditScreen, ExercisesScreen, PlanScreen, SplitEditorScreen,
 } from './screens/Plan';
@@ -17,6 +18,7 @@ function match(path: string) {
   if (a === 'workout') return { tab: 'workout', el: <WorkoutScreen /> };
   if (a === 'w' && b) return { tab: 'history', el: <WorkoutDetailScreen id={b} key={b} /> };
   if (a === 'history') return { tab: 'history', el: <HistoryScreen /> };
+  if (a === 'prs') return { tab: 'home', el: <PrsScreen /> };
   if (a === 'plan') {
     if (b === 'split' && c) return { tab: 'plan', el: <SplitEditorScreen id={c} key={c} /> };
     if (b === 'day' && c) return { tab: 'plan', el: <DayTypeEditorScreen id={c} key={c} /> };
@@ -29,10 +31,10 @@ function match(path: string) {
 }
 
 const TABS = [
-  { id: 'home', path: '/', icon: '🏠', label: 'Home' },
-  { id: 'history', path: '/history', icon: '📅', label: 'History' },
-  { id: 'plan', path: '/plan', icon: '📋', label: 'Plan' },
-  { id: 'settings', path: '/settings', icon: '⚙️', label: 'Settings' },
+  { id: 'home', path: '/', Icon: IconHome, label: 'Home' },
+  { id: 'history', path: '/history', Icon: IconCalendar, label: 'History' },
+  { id: 'plan', path: '/plan', Icon: IconDumbbell, label: 'Plan' },
+  { id: 'settings', path: '/settings', Icon: IconGear, label: 'Settings' },
 ];
 
 export function App() {
@@ -48,7 +50,7 @@ export function App() {
           <nav class="tabbar">
             {TABS.map((t) => (
               <button key={t.id} class={`tab ${tab === t.id ? 'on' : ''}`} onClick={() => go(t.path)}>
-                <span class="tab-icon">{t.icon}</span>
+                <t.Icon size={24} class="tab-icon" />
                 <span class="tab-label">{t.label}</span>
               </button>
             ))}

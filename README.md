@@ -2,13 +2,13 @@
 
 A personal, free, phone-first workout and bulking tracker. It's an installable web app (PWA) that works offline and keeps your data on your phone, with optional backup to your own Google Sheet.
 
-**Status: Phase 2 (sync and backup).**
+**Status: Phase 3 (dashboard).**
 
 | Phase | What | Status |
 |---|---|---|
 | 1 | Templates, workout logging, rest timer, local storage, install + offline | ✅ |
-| 2 | Google Sheets sync via Apps Script, JSON export/import | ✅ this release |
-| 3 | Dashboard: icon calendar, streak, PRs, e1RM charts, rest stats | |
+| 2 | Google Sheets sync via Apps Script, JSON export/import | ✅ |
+| 3 | Dashboard: icon calendar, streak, PRs, e1RM charts, rest stats | ✅ this release |
 | 4 | Bodyweight, measurements, food log (with meal start/finish times), bulk check | |
 | 5 | Progress photos | |
 
@@ -26,6 +26,20 @@ A personal, free, phone-first workout and bulking tracker. It's an installable w
 - **Finish summary.** Duration, working sets, volume, PRs, and average rest per exercise and per session.
 - **Rest timer.** It starts automatically when you complete a set, using that exercise's rest. After the last set of an exercise it uses the longer "moving to the next exercise" rest (default 3:00). It has −15s, Skip and +15s buttons, a big sticky countdown (tap it to shrink it), a mini-bar on other screens, and a quick RIR picker for the set you just did. After rest ends it counts up in green, so you can see how long you over-rested.
 - **Actual rest tracking.** The time between completed sets is measured separately from the timer and stored on each set (`rest_before_s`). Gaps between different exercises are flagged and left out of "working rest" averages, as are gaps over 10 minutes.
+
+## The dashboard (Phase 3)
+
+Home, top to bottom:
+
+1. **Today.** Your next workout in the rotation, with exercise count and when you last did it. **Start** is one tap; **Change** picks another day or an empty workout. On a planned rest day it says so, with a **Train anyway** button.
+2. **Consistency.** This week's sessions against your target (ring), your **streak**, and sessions this month, above a **month calendar**. Each training day shows its day-type icon on its colour, and today is outlined. Tap a day to open that workout (if you trained twice, you choose which). Swipe or use the arrows to change month; **Today** jumps back. The card header opens **History** at the same month.
+   - *Streak* = consecutive weeks (Mon–Sun) in which you hit your weekly target. The current week only adds to it once you hit the target, and it never breaks the streak while it's still in progress.
+3. **Recent PRs.** Your latest records with how much you beat the previous one (▲ 2.5 kg, ▲ 1 rep). Tap one to open that workout; **All** lists every record by month. Records are recalculated from your full history, so deleting a workout keeps them correct.
+4. **Trends**, with one time-range control (1M / 3M / 6M / 1Y / All) for both cards:
+   - **Strength.** Estimated 1RM (Epley) per session for the lift you pick (most-trained first), with the change over the period. Tap or drag on the chart to see a session; tap the tooltip to open it.
+   - **Rest.** Average working rest (between sets of the same exercise) and how it compares with the period before, one column per session, plus per-exercise averages.
+
+**History** has the same calendar, full size, with the month's totals and every session in that month.
 
 ## iPhone: what works and what doesn't
 
@@ -107,7 +121,9 @@ src/
   state/workout.ts    start/log/finish workouts, previous sets, rest tracking
   state/timer.ts      end-time-based rest timer
   state/device.ts     beep (Web Audio + audioSession), wake lock, notifications
-  screens/            Home, Workout, History/Summary, Plan editors, Settings
+  lib/stats.ts        dashboard maths: calendar grid, streak, PR replay, e1RM series, rest stats
+  screens/            Home (dashboard), Workout, History/Summary/PRs, Plan editors, Settings
+  components/charts   small SVG line + column charts with tap-to-inspect
   components/         sheet, stepper, RIR picker, timer panel, exercise picker
   sync/sync.ts        push/pull engine, connect, automatic sync
   sync/merge.ts       newest-wins merging (used by pull and import)

@@ -5,7 +5,7 @@ import {
   audioSessionSupported, beep, isStandalone, notifPermission, requestNotifications, storagePersisted,
   unlockAudio, wakeLockSupported,
 } from '../state/device';
-import { Header, Stepper, Toggle, toast } from '../components/ui';
+import { PageTitle, Stepper, Toggle, toast } from '../components/ui';
 import { BackupSection, SyncSection } from './SyncSettings';
 
 export function SettingsScreen() {
@@ -31,7 +31,7 @@ export function SettingsScreen() {
 
   return (
     <div class="page">
-      <Header title="Settings" />
+      <PageTitle title="Settings" />
 
       {!standalone && (
         <section class="card warn-card">

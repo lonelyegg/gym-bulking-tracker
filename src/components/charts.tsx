@@ -209,3 +209,80 @@ export function ColumnChart(props: BaseProps) {
     </div>
   );
 }
+
+/**
+ * Bodyweight: daily weigh-ins as small muted dots, the 7-day moving average as the line.
+ * Two series, so there's a legend. Tap or drag to inspect a day.
+ */
+export function WeightChart(props: {
+  points: { key: string; x: number; kg: number; avg: number }[];
+  height?: number;
+  color: string;
+  formatX: (x: number) => string;
+  label: string;
+  onOpen?: (key: string) => void;
+}) {
+  const { points, height = 190, color } = props;
+  const [ref, width] = useWidth();
+  const [sel, setSel] = useSelection(points.length);
+  if (!points.length) return null;
+  const vals = points.flatMap((p) => [p.kg, p.avg]);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const spread = hi - lo || 1;
+  const ticks = niceTicks(lo - spread * 0.2, hi + spread * 0.2, 4);
+  const yMin = ticks[0];
+  const yMax = ticks[ticks.length - 1];
+  const x0 = points[0].x;
+  const x1 = points[points.length - 1].x;
+  const plotW = width - PAD.left - PAD.right;
+  const plotH = height - PAD.top - PAD.bottom;
+  const x = (v: number) => (x1 === x0 ? PAD.left + plotW / 2 : PAD.left + ((v - x0) / (x1 - x0)) * plotW);
+  const y = (v: number) => PAD.top + (1 - (v - yMin) / (yMax - yMin || 1)) * plotH;
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(1)},${y(p.avg).toFixed(1)}`).join('');
+  const pick = (clientX: number, el: Element) => {
+    const rect = el.getBoundingClientRect();
+    const px = ((clientX - rect.left) / rect.width) * width;
+    let best = 0;
+    points.forEach((p, i) => { if (Math.abs(x(p.x) - px) < Math.abs(x(points[best].x) - px)) best = i; });
+    setSel(best);
+  };
+  const sp = sel != null ? points[sel] : null;
+  const fmt = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
+  const xLabels = points.length > 1
+    ? [{ x: x(x0), text: props.formatX(x0), anchor: 'start' as const }, { x: x(x1), text: props.formatX(x1), anchor: 'end' as const }]
+    : [{ x: x(x0), text: props.formatX(x0), anchor: 'middle' as const }];
+  return (
+    <>
+      <div class="chart-legend">
+        <span><i class="lg-dot" />Daily</span>
+        <span><i class="lg-line" style={{ background: color }} />7-day average</span>
+      </div>
+      <div class="chart" ref={ref} style={{ height: `${height}px` }}>
+        <svg width={width} height={height} role="img" aria-label={props.label} tabIndex={0}
+          onPointerDown={(e) => pick(e.clientX, e.currentTarget)}
+          onPointerMove={(e) => { if (e.pointerType === 'mouse' || e.buttons) pick(e.clientX, e.currentTarget); }}
+          onPointerLeave={(e) => { const to = e.relatedTarget as Node | null; if (e.pointerType === 'mouse' && !(to && ref.current?.contains(to))) setSel(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowRight') setSel(Math.min(points.length - 1, (sel ?? -1) + 1));
+            if (e.key === 'ArrowLeft') setSel(Math.max(0, (sel ?? points.length) - 1));
+          }}>
+          <Frame width={width} height={height} ticks={ticks} y={y} formatY={(v) => `${v}`} xLabels={xLabels}>
+            {points.map((p, i) => <circle key={p.key} cx={x(p.x)} cy={y(p.kg)} r={i === sel ? 4.5 : 3} class="chart-daily" />)}
+            {points.length > 1 && <path d={line} fill="none" stroke={color} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />}
+            {sp && <line x1={x(sp.x)} x2={x(sp.x)} y1={PAD.top} y2={PAD.top + plotH} class="chart-cross" />}
+            <circle cx={x(points[points.length - 1].x)} cy={y(points[points.length - 1].avg)} r="4" fill={color} class="chart-dot" />
+            {sp && <circle cx={x(sp.x)} cy={y(sp.avg)} r="5" fill={color} class="chart-dot" />}
+          </Frame>
+        </svg>
+        {sp && (
+          <Tooltip x={x(sp.x)} width={width} onOpen={props.onOpen && (() => props.onOpen!(sp.key))}>
+            <div class="tip-value">{fmt(sp.kg)} kg</div>
+            <div class="tip-sub">avg {fmt(sp.avg)} · {props.formatX(sp.x)}</div>
+          </Tooltip>
+        )}
+        <table class="sr-only"><caption>{props.label}</caption><tbody>{points.map((p) => <tr key={p.key}><td>{props.formatX(p.x)}</td><td>{fmt(p.kg)}</td><td>{fmt(p.avg)}</td></tr>)}</tbody></table>
+      </div>
+    </>
+  );
+}

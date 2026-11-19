@@ -2,14 +2,14 @@
 
 A personal, free, phone-first workout and bulking tracker. It's an installable web app (PWA) that works offline and keeps your data on your phone, with optional backup to your own Google Sheet.
 
-**Status: Phase 3 + extras (muscle model, exercise pages, planned days, logging past workouts).**
+**Status: Phase 4 (bodyweight, measurements, food log, bulk check).**
 
 | Phase | What | Status |
 |---|---|---|
 | 1 | Templates, workout logging, rest timer, local storage, install + offline | ✅ |
 | 2 | Google Sheets sync via Apps Script, JSON export/import | ✅ |
-| 3 | Dashboard: icon calendar, streak, PRs, e1RM charts, rest stats | ✅ this release |
-| 4 | Bodyweight, measurements, food log (with meal start/finish times), bulk check | |
+| 3 | Dashboard: icon calendar, streak, PRs, e1RM charts, rest stats | ✅ |
+| 4 | Bodyweight, measurements, food log (with meal start/finish times), bulk check | ✅ this release |
 | 5 | Progress photos | |
 
 ---
@@ -40,6 +40,30 @@ Home, top to bottom:
    - **Rest.** Average working rest (between sets of the same exercise) and how it compares with the period before, one column per session, plus per-exercise averages.
 
 **History** has the same calendar, full size, with the month's totals and every session in that month.
+
+## Food, body and the bulk check (Phase 4)
+
+**Tabs:** Home · Food · Body · History · Plan. Settings is the ⚙︎ on Home (and the button on Plan).
+
+### Food
+- **Targets.** Two bars, calories and protein, on the Food tab and inside Home's Today card. Protein target = 1.8 g × your current bodyweight (editable). Set them under **Targets** on the Food tab, or in Settings.
+- **My foods.** Enter each food you eat regularly once: calories and protein (carbs and fat optional), per 100 g or per serving, with an optional serving size (e.g. "1 scoop = 30 g") so you can log by grams or servings.
+- **Logging.** **Add food** shows your **recent** foods first, then the rest by how often you eat them. Pick one; the amount is pre-filled with what you had last time; tap **Add**. Food goes into the meal you're eating now (or starts a new one, named by time of day).
+- **Meals have start and finish times.** A new meal shows "Eating since 12:30" with a **Finish meal** button. Tap a meal's **Edit** to change its times, rename it, save it, or delete it.
+- **One-tap meals.** Save any meal (**Edit → Save as a saved meal**). It becomes a ⚡ button at the top of the Food tab: one tap logs it, and a second tap finishes it. **Copy yesterday** copies yesterday's meals at the same times.
+- **Other days.** Use ‹ › to view or log a past day (tap the date to jump back to today).
+- Each entry stores its own calories and protein, so editing or deleting a food later never changes what you logged.
+
+### Body
+- **Weigh-in.** One weight per day (logging again updates it), with optional sleep hours. It's on the Body tab, and on Home until you've weighed in today (adjust with − / + and Save: two taps).
+- **Weight chart.** Daily weigh-ins as dots, with the **7-day moving average** as the line. That's the trend to watch, because daily weight swings with water and food.
+- **Measurements** (waist, chest, shoulders, upper arm, thigh, plus any you add). The table shows the latest value, the change since you started, and the change over the last 30 days. Green means the direction you want while bulking (bigger), except **waist, where growth shows red**.
+
+### Bulk check
+- Compares your **7-day average weight now with 3 weeks ago** (or 2 weeks if that's all there is) against your target rate, default **0.25–0.5% of bodyweight per week**. It needs 3+ weigh-ins in each of those weeks.
+- Shows your **average daily calories** over the same weeks next to it, so the cause is obvious.
+- **Too slow** → it suggests **+150 to +250 kcal/day** on top of what you've actually been eating (the amount is what's needed to reach the middle of your target range, kept within 150–250). **Well above target** (more than 1.5× the top of the range) → it suggests 150–250 less. Slightly above → no change yet. **Set as target** applies the suggestion.
+- If you've only logged food on some days, it tells you the average may be off.
 
 ## Muscles, exercise pages and planning (v0.4)
 
@@ -134,6 +158,10 @@ src/
   lib/stats.ts        dashboard maths: calendar grid, streak, PR replay, e1RM series, rest stats,
                       weekly sets per muscle, planned-day projection, per-exercise summary
   lib/muscles.ts      muscle list, weights, legacy upgrade, colour scale
+  lib/nutrition.ts    food maths: amounts, totals, meal names, recent/frequent ordering
+  lib/body.ts         moving average, bulk check, measurement table
+  state/food.ts       meals, food logs, saved meals, copy day
+  state/body.ts       weigh-ins, sleep, measurements
   components/BodyMap  front/back body figure (bodyPaths.ts holds the shapes)
   db/migrate.ts       one-time upgrades run at launch
   screens/            Home (dashboard), Workout, History/Summary/PRs, Plan editors, Settings

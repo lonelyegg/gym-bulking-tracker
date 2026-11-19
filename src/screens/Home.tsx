@@ -15,11 +15,17 @@ import { useTraining, type TrainingData } from '../state/training';
 import { computeNextUp, getActiveWorkout, startWorkout } from '../state/workout';
 import { MonthCalendar } from '../components/Calendar';
 import { ColumnChart, LineChart } from '../components/charts';
+import { IconGear, IconScale } from '../components/icons';
 import { IconDumbbell, IconFlame, IconPlay, IconTimer, IconTrend, IconTrophy } from '../components/icons';
 import { fmtDay, PrRow } from '../components/PrRow';
 import { go, PageTitle, Section, Segmented } from '../components/ui';
 import { isConfigured } from '../sync/sync';
 import { SyncChip } from './SyncSettings';
+import { MeasurementsCard, WeighInCard, weightSeries } from './Body';
+import { BulkCheckView, FoodBars, useBulkCheck } from '../components/nutrition';
+import { WeightChart } from '../components/charts';
+import { useBody } from '../state/body';
+import { weekAverage } from '../lib/body';
 import { historyMonth } from './History';
 
 /** Calendar month on Home; kept while you open a workout and come back. */
@@ -48,9 +54,9 @@ export function HomeScreen() {
   return (
     <div class="page">
       <PageTitle
-        sub={new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+        sub={new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
         title="Today"
-        right={<SyncChip />}
+        right={<div class="row gap-sm"><SyncChip /><button class="icon-btn sm gear" aria-label="Settings" onClick={() => go('/settings')}><IconGear size={20} /></button></div>}
       />
       <TodayCard data={data} />
 
@@ -72,6 +78,8 @@ export function HomeScreen() {
       {data && <RecentPrs data={data} />}
       {data && <MuscleVolume data={data} />}
       {data && <Trends data={data} />}
+      <BodyweightCard />
+      <HomeMeasurements />
       <div class="bottom-space" />
     </div>
   );
@@ -113,6 +121,7 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
           </div>
         </div>
         <button class="btn primary block lg" onClick={() => go('/workout')}><IconPlay /> {active.backfill ? 'Continue logging' : 'Resume workout'}</button>
+        <TodayFood />
       </div>
     );
   }
@@ -152,8 +161,17 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
         {!isRest && <IconPlay />}{isRest ? 'Train anyway' : d ? `Start ${d.name}` : 'Start empty workout'}
       </button>
 
+      <TodayFood />
       <StartSheet open={choose} onClose={() => setChoose(false)} />
     </div>
+  );
+}
+
+function TodayFood() {
+  return (
+    <button class="today-food" onClick={() => go('/food')} aria-label="Today's food, open the food log">
+      <FoodBars compact />
+    </button>
   );
 }
 
@@ -405,4 +423,39 @@ function Rest({ data, slice, range }: { data: TrainingData; slice: Slice; range:
       )}
     </Section>
   );
+}
+
+// ---------- 5. Bodyweight ----------
+
+function BodyweightCard() {
+  const body = useBody();
+  const check = useBulkCheck();
+  if (!body) return null;
+  const pts = weightSeries(body, '3M');
+  const today = localDate();
+  const loggedToday = body.weights.some((w) => w.date === today && w.weight_kg != null);
+  const avg = weekAverage(body.weights.filter((w) => w.weight_kg != null).map((w) => ({ date: w.date, kg: w.weight_kg! })), today, 1);
+  return (
+    <Section title="Bodyweight" icon={<IconScale size={16} />} tone="var(--blue)" more="Body" onMore={() => go('/body')}>
+      {!loggedToday && <WeighInCard body={body} compact />}
+      {pts.length > 0 && (<>
+        <div class="hero"><span class="hero-value">{avg != null ? avg.toFixed(1) : pts[pts.length - 1].avg.toFixed(1)}</span><span class="hero-unit">kg · 7-day average</span></div>
+        {check && check.status !== 'no-data' && (
+          <div class="hero-sub">{check.rateKgPerWeek! >= 0 ? '+' : '−'}{Math.abs(check.rateKgPerWeek!).toFixed(2)} kg/week{check.avgIntake != null ? ` · eating ${check.avgIntake.toLocaleString()} kcal/day` : ''}</div>
+        )}
+        {pts.length > 1 && <WeightChart label="Bodyweight, last 3 months" color="#6fb1ff" height={150}
+          points={pts.map((p) => ({ key: p.date, x: Date.parse(`${p.date}T12:00:00`), kg: p.kg, avg: p.avg }))}
+          formatX={(x) => new Date(x).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} />}
+      </>)}
+      <div class="bulk-wrap"><BulkCheckView /></div>
+    </Section>
+  );
+}
+
+// ---------- 6. Measurements ----------
+
+function HomeMeasurements() {
+  const body = useBody();
+  if (!body) return null;
+  return <div class="tap-wrap" onClick={() => go('/body')}><MeasurementsCard body={body} /></div>;
 }

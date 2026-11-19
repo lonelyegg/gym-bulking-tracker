@@ -21,3 +21,6 @@ export const IconPlay = ({ size = 18, class: c }: P) => (
   <svg class={`icon ${c ?? ''}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.4-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5z" fill="currentColor" /></svg>
 );
 export const IconSwap = ({ size = 18, class: c }: P) => base(size, c, [<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" />]);
+export const IconFood = ({ size, class: c }: P) => base(size, c, [<path d="M7 2v8a2 2 0 0 0 2 2v10M11 2v8a2 2 0 0 1-2 2M9 2v5" />, <path d="M17 22V2c-2.2 1.2-3.5 3.6-3.5 6.5V13H17" />]);
+export const IconScale = ({ size, class: c }: P) => base(size, c, [<rect x="3" y="3" width="18" height="18" rx="5" />, <path d="M8.5 9.5a5 5 0 0 1 7 0M12 12l1.5-2.5" />]);
+export const IconPlus = ({ size = 18, class: c }: P) => base(size, c, <path d="M12 5v14M5 12h14" />);

@@ -1,11 +1,13 @@
 import { useLive } from './db/db';
 import { getActiveWorkout } from './state/workout';
-import { ConfirmHost, go, route, Toasts } from './components/ui';
+import { ConfirmHost, go, PromptHost, route, Toasts } from './components/ui';
 import { MiniBar } from './components/timer';
 import { HomeScreen } from './screens/Home';
 import { WorkoutScreen } from './screens/Workout';
 import { HistoryScreen, PrsScreen, WorkoutDetailScreen } from './screens/History';
-import { IconCalendar, IconDumbbell, IconGear, IconHome } from './components/icons';
+import { IconCalendar, IconDumbbell, IconFood, IconHome, IconScale } from './components/icons';
+import { FoodScreen, FoodsScreen } from './screens/Food';
+import { BodyScreen } from './screens/Body';
 import {
   DayTypeEditorScreen, ExerciseEditScreen, ExercisesScreen, PlanScreen, SplitEditorScreen,
 } from './screens/Plan';
@@ -28,15 +30,18 @@ function match(path: string) {
     if (b === 'exercise' && c) return { tab: 'plan', el: <ExerciseEditScreen id={c} key={c} /> };
     return { tab: 'plan', el: <PlanScreen /> };
   }
-  if (a === 'settings') return { tab: 'settings', el: <SettingsScreen /> };
+  if (a === 'settings') return { tab: 'home', el: <SettingsScreen /> };
+  if (a === 'food') return { tab: 'food', el: b === 'foods' ? <FoodsScreen /> : <FoodScreen /> };
+  if (a === 'body') return { tab: 'body', el: <BodyScreen /> };
   return { tab: 'home', el: <HomeScreen /> };
 }
 
 const TABS = [
   { id: 'home', path: '/', Icon: IconHome, label: 'Home' },
+  { id: 'food', path: '/food', Icon: IconFood, label: 'Food' },
+  { id: 'body', path: '/body', Icon: IconScale, label: 'Body' },
   { id: 'history', path: '/history', Icon: IconCalendar, label: 'History' },
   { id: 'plan', path: '/plan', Icon: IconDumbbell, label: 'Plan' },
-  { id: 'settings', path: '/settings', Icon: IconGear, label: 'Settings' },
 ];
 
 export function App() {
@@ -61,6 +66,7 @@ export function App() {
       )}
       <Toasts />
       <ConfirmHost />
+      <PromptHost />
     </>
   );
 }

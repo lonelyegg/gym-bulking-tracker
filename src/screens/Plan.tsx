@@ -34,7 +34,7 @@ export function PlanScreen() {
 
   return (
     <div class="page">
-      <PageTitle title="Plan" />
+      <PageTitle title="Plan" right={<button class="btn sm" onClick={() => go('/settings')}>Settings</button>} />
       <section class="card">
         <div class="row between center">
           <span class="bold">Sessions per week</span>

@@ -5,7 +5,8 @@ import {
   audioSessionSupported, beep, isStandalone, notifPermission, requestNotifications, storagePersisted,
   unlockAudio, wakeLockSupported,
 } from '../state/device';
-import { PageTitle, Stepper, Toggle, toast } from '../components/ui';
+import { Header, Stepper, Toggle, toast } from '../components/ui';
+import { TargetsForm } from '../components/nutrition';
 import { BackupSection, SyncSection } from './SyncSettings';
 
 export function SettingsScreen() {
@@ -31,7 +32,7 @@ export function SettingsScreen() {
 
   return (
     <div class="page">
-      <PageTitle title="Settings" />
+      <Header title="Settings" back="/" />
 
       {!standalone && (
         <section class="card warn-card">
@@ -76,6 +77,9 @@ export function SettingsScreen() {
             ? <p class="good small">✓ Notifications allowed</p>
             : <button class="btn block" onClick={requestNotifications}>Allow notifications</button>}
       </section>
+
+      <h3 class="section-title">Nutrition &amp; bulking</h3>
+      <section class="card"><TargetsForm /></section>
 
       <h3 class="section-title">Equipment</h3>
       <section class="card form">

@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals';
 import { db, put } from '../db/db';
+import { DEFAULT_SITES, type Site } from '../lib/body';
 
 export type BeepMode = 'transient' | 'ambient' | 'off';
 
@@ -20,6 +21,8 @@ export interface Settings {
   kcal_target: number | null;
   gain_rate_min_pct: number;
   gain_rate_max_pct: number;
+  /** Body measurements you track (defaults + your custom ones). */
+  measurement_sites: Site[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -36,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   kcal_target: null,
   gain_rate_min_pct: 0.25,
   gain_rate_max_pct: 0.5,
+  measurement_sites: DEFAULT_SITES,
 };
 
 export const settings = signal<Settings>({ ...DEFAULT_SETTINGS });

@@ -22,7 +22,7 @@ export const toasts = signal<Toast[]>([]);
 let toastId = 0;
 export function toast(text: string, kind: Toast['kind'] = 'info', ms = 3000) {
   const t = { id: ++toastId, text, kind };
-  toasts.value = [...toasts.value, t];
+  toasts.value = [...toasts.value, t].slice(-2); // at most two on screen
   setTimeout(() => { toasts.value = toasts.value.filter((x) => x.id !== t.id); }, ms);
 }
 
@@ -211,5 +211,29 @@ export function Segmented<T extends string>(props: { value: T; options: readonly
         <button key={o} role="radio" aria-checked={props.value === o} class={props.value === o ? 'on' : ''} onClick={() => props.onChange(o)}>{o}</button>
       ))}
     </div>
+  );
+}
+
+/** Promise-based text prompt rendered as a sheet (resolves null if cancelled). */
+const promptState = signal<{ title: string; value: string; ok: string; placeholder?: string; resolve: (v: string | null) => void } | null>(null);
+export function promptSheet(title: string, value = '', ok = 'Save', placeholder?: string): Promise<string | null> {
+  return new Promise((resolve) => { promptState.value = { title, value, ok, placeholder, resolve }; });
+}
+export function PromptHost() {
+  const p = promptState.value;
+  const [text, setText] = useState('');
+  useEffect(() => { if (p) setText(p.value); }, [p]);
+  const close = (v: string | null) => { p?.resolve(v); promptState.value = null; };
+  return (
+    <Sheet open={!!p} onClose={() => close(null)} title={p?.title}>
+      <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) close(text.trim()); }}>
+        <input class="input" value={text} placeholder={p?.placeholder} autoFocus
+          onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} />
+        <div class="row gap mt">
+          <button type="button" class="btn grow" onClick={() => close(null)}>Cancel</button>
+          <button type="submit" class="btn grow primary" disabled={!text.trim()}>{p?.ok}</button>
+        </div>
+      </form>
+    </Sheet>
   );
 }

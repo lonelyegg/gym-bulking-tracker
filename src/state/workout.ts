@@ -33,15 +33,18 @@ export interface PreviousSession {
 
 const isDoneSet = (s: WorkoutSet) => !s.deleted && s.completed_at && s.weight_kg != null && s.reps != null;
 
-/** The most recent finished session that included this exercise (from any day type). */
-export async function previousSession(exerciseId: string, excludeWorkoutId?: string): Promise<PreviousSession | null> {
+/**
+ * The most recent finished session that included this exercise (from any day type), before `before`
+ * (a workout's start time) when given, so a workout logged for a past day compares with what came before it.
+ */
+export async function previousSession(exerciseId: string, excludeWorkoutId?: string, before?: string): Promise<PreviousSession | null> {
   const sets = (await db.sets.where('exercise_id').equals(exerciseId).toArray()).filter(
     (s) => isDoneSet(s) && s.workout_id !== excludeWorkoutId,
   );
   if (!sets.length) return null;
   const workoutIds = [...new Set(sets.map((s) => s.workout_id))];
   const workouts = (await db.workouts.bulkGet(workoutIds)).filter(
-    (w): w is Workout => alive(w) && w.status === 'done',
+    (w): w is Workout => alive(w) && w.status === 'done' && (!before || w.started_at < before),
   );
   if (!workouts.length) return null;
   const last = workouts.sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
@@ -54,15 +57,15 @@ export async function previousSession(exerciseId: string, excludeWorkoutId?: str
   };
 }
 
-/** All completed working sets for an exercise from finished workouts. */
-async function priorWorkingSets(exerciseId: string, excludeWorkoutId: string): Promise<SetLite[]> {
+/** All completed working sets for an exercise from finished workouts that started before `before`. */
+async function priorWorkingSets(exerciseId: string, excludeWorkoutId: string, before?: string): Promise<SetLite[]> {
   const sets = (await db.sets.where('exercise_id').equals(exerciseId).toArray()).filter(
     (s) => isDoneSet(s) && !s.is_warmup && s.workout_id !== excludeWorkoutId,
   );
   if (!sets.length) return [];
   const ids = [...new Set(sets.map((s) => s.workout_id))];
   const ok = new Set(
-    (await db.workouts.bulkGet(ids)).filter((w) => alive(w) && w!.status === 'done').map((w) => w!.id),
+    (await db.workouts.bulkGet(ids)).filter((w) => alive(w) && w!.status === 'done' && (!before || w!.started_at < before)).map((w) => w!.id),
   );
   return sets.filter((s) => ok.has(s.workout_id)).map((s) => ({ weight_kg: s.weight_kg!, reps: s.reps!, rir: s.rir }));
 }
@@ -102,15 +105,35 @@ function buildSets(workoutId: string, weId: string, exerciseId: string, count: n
   }));
 }
 
-export async function startWorkout(dayTypeId: string | null, opts: { suggestedIndex?: number } = {}): Promise<string> {
+/** Evening of a past local date, used as the start time of a workout logged afterwards. */
+export function backfillStart(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d, 18, 0, 0).toISOString();
+}
+
+/**
+ * Start a workout. With `at` (a past local date YYYY-MM-DD) it's logged afterwards for that day:
+ * no timers, and you set its duration when you finish.
+ */
+export async function startWorkout(dayTypeId: string | null, opts: { suggestedIndex?: number; at?: string } = {}): Promise<string> {
   const existing = await getActiveWorkout();
   if (existing) return existing.id;
 
+  const backfill = !!opts.at;
+  const startedAt = opts.at ? backfillStart(opts.at) : nowIso();
   const dayType = dayTypeId ? await db.day_types.get(dayTypeId) : undefined;
   const splitId = settings.value.active_split_id;
   const split = splitId ? await db.splits.get(splitId) : undefined;
   let rotation_index: number | null = null;
-  if (dayType && alive(split)) rotation_index = rotationIndexFor(split, dayType.id, opts.suggestedIndex ?? 0);
+  if (dayType && alive(split)) {
+    let from = opts.suggestedIndex ?? 0;
+    if (backfill) {
+      // Which slot was due on that day: the one after the last counted workout before it.
+      const prev = (await doneWorkouts()).find((w) => w.split_id === split.id && w.rotation_index != null && w.started_at < startedAt);
+      from = prev ? (prev.rotation_index! + 1) % Math.max(1, split.rotation.length) : 0;
+    }
+    rotation_index = rotationIndexFor(split, dayType.id, from);
+  }
 
   const workoutId = crypto.randomUUID();
   const workout: Omit<Workout, 'created_at' | 'updated_at' | 'deleted'> = {
@@ -121,10 +144,11 @@ export async function startWorkout(dayTypeId: string | null, opts: { suggestedIn
     name: dayType?.name ?? 'Workout',
     icon: dayType?.icon ?? '🏋️',
     color: dayType?.color ?? '#8b93a7',
-    started_at: nowIso(),
+    started_at: startedAt,
     ended_at: null,
     status: 'active',
     notes: '',
+    backfill: backfill ? 1 : 0,
   };
 
   const wes: Omit<WorkoutExercise, 'created_at' | 'updated_at' | 'deleted'>[] = [];
@@ -149,8 +173,10 @@ export async function startWorkout(dayTypeId: string | null, opts: { suggestedIn
     if (wes.length) await put('workout_exercises', ...wes);
     if (sets.length) await put('sets', ...sets);
   });
-  unlockAudio();
-  if (settings.value.wake_lock) setWakeLock(true);
+  if (!backfill) {
+    unlockAudio();
+    if (settings.value.wake_lock) setWakeLock(true);
+  }
   return workoutId;
 }
 
@@ -164,7 +190,8 @@ async function workoutExercises(workoutId: string) {
 
 export async function addExercise(workoutId: string, ex: Exercise): Promise<void> {
   const list = await workoutExercises(workoutId);
-  const prev = await previousSession(ex.id, workoutId);
+  const w = await db.workouts.get(workoutId);
+  const prev = await previousSession(ex.id, workoutId, w?.started_at);
   const count = prev?.working.length || 3;
   const weId = crypto.randomUUID();
   await db.transaction('rw', db.workout_exercises, db.sets, db.outbox, async () => {
@@ -259,7 +286,8 @@ export async function updateSet(set: WorkoutSet, changes: Partial<WorkoutSet>): 
 }
 
 async function prsFor(set: WorkoutSet): Promise<PrType[]> {
-  const prior = await priorWorkingSets(set.exercise_id, set.workout_id);
+  const w = await db.workouts.get(set.workout_id);
+  const prior = await priorWorkingSets(set.exercise_id, set.workout_id, w?.started_at);
   const today = (await db.sets.where('workout_id').equals(set.workout_id).toArray())
     .filter((s) => isDoneSet(s) && !s.is_warmup && s.exercise_id === set.exercise_id && s.id !== set.id
       && s.completed_at! < (set.completed_at ?? '9'))
@@ -275,25 +303,29 @@ export async function completeSet(
   set: WorkoutSet,
   values: { weight_kg: number; reps: number; rir: number | null },
 ): Promise<PrType[]> {
-  unlockAudio();
-  const completed_at = nowIso();
+  const workout = await db.workouts.get(set.workout_id);
+  const backfill = !!workout?.backfill;
+  if (!backfill) unlockAudio();
   const all = (await db.sets.where('workout_id').equals(set.workout_id).toArray()).filter((s) => !s.deleted);
   const prevDone = all
     .filter((s) => s.completed_at && s.id !== set.id)
     .sort((a, b) => b.completed_at!.localeCompare(a.completed_at!))[0];
-  const workout = await db.workouts.get(set.workout_id);
-  const restFrom = prevDone?.completed_at ?? null;
+  // A workout logged afterwards has no real clock: keep sets in order, 2½ minutes apart, and record no rest.
+  const completed_at = backfill
+    ? new Date(Date.parse(prevDone?.completed_at ?? workout!.started_at) + 150_000).toISOString()
+    : nowIso();
+  const restFrom = backfill ? null : prevDone?.completed_at ?? null;
   const rest_before_s = restFrom ? Math.round((Date.parse(completed_at) - Date.parse(restFrom)) / 1000) : null;
 
   const pr_types = await updateSet(set, {
     ...values,
     completed_at,
     rest_before_s,
-    rest_is_transition: prevDone && prevDone.workout_exercise_id !== set.workout_exercise_id ? 1 : 0,
+    rest_is_transition: !backfill && prevDone && prevDone.workout_exercise_id !== set.workout_exercise_id ? 1 : 0,
   });
 
-  // Start the rest timer, unless the whole workout is done.
-  if (workout?.status === 'active') {
+  // Start the rest timer, unless the whole workout is done (or it's logged afterwards).
+  if (workout?.status === 'active' && !backfill) {
     const wes = await workoutExercises(set.workout_id);
     const exNames = new Map((await db.exercises.bulkGet(wes.map((w) => w.exercise_id))).filter(Boolean).map((e) => [e!.id, e!.name]));
     const pending = (weId: string) => all.filter((s) => s.workout_exercise_id === weId && !s.completed_at && s.id !== set.id);
@@ -363,12 +395,16 @@ export async function incompleteSetCount(workoutId: string): Promise<number> {
   return (await db.sets.where('workout_id').equals(workoutId).toArray()).filter((s) => !s.deleted && !s.completed_at).length;
 }
 
-/** Finish: drop sets that were never completed and close the workout. */
-export async function finishWorkout(workoutId: string): Promise<void> {
+/** Finish: drop sets that were never completed and close the workout. `durationMin` is for workouts logged afterwards. */
+export async function finishWorkout(workoutId: string, opts: { durationMin?: number } = {}): Promise<void> {
+  const w = await db.workouts.get(workoutId);
   const sets = (await db.sets.where('workout_id').equals(workoutId).toArray()).filter((s) => !s.completed_at);
   await hardDelete('sets', sets.map((s) => s.id));
   for (const we of await workoutExercises(workoutId)) await renumber(we.id);
-  await patch('workouts', workoutId, { status: 'done', ended_at: nowIso() });
+  const ended_at = w?.backfill
+    ? new Date(Date.parse(w.started_at) + Math.max(1, opts.durationMin ?? 60) * 60_000).toISOString()
+    : nowIso();
+  await patch('workouts', workoutId, { status: 'done', ended_at });
   stopRest();
   setWakeLock(false);
 }

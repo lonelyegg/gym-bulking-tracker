@@ -1,8 +1,10 @@
 // Pure dashboard maths (no database, no DOM) so every number on the dashboard is unit-tested.
-import type { Exercise, PrType, Workout, WorkoutSet } from '../db/schema';
-import { avgRest, epley, localDate } from './logic';
+import type { Exercise, PrType, Split, Workout, WorkoutSet } from '../db/schema';
+import { avgRest, epley, localDate, nextInRotation } from './logic';
+import { resolveMuscles, type Muscle, type MuscleMap } from './muscles';
 
-export type W = Pick<Workout, 'id' | 'started_at' | 'ended_at' | 'day_type_id' | 'name' | 'icon' | 'color'>;
+export type W = Pick<Workout, 'id' | 'started_at' | 'ended_at' | 'day_type_id' | 'name' | 'icon' | 'color'>
+  & Partial<Pick<Workout, 'split_id' | 'rotation_index' | 'backfill'>>;
 /** A completed set with weight and reps filled in. */
 export type S = Pick<WorkoutSet, 'id' | 'workout_id' | 'exercise_id' | 'set_number' | 'is_warmup' | 'rir' | 'completed_at' | 'rest_before_s' | 'rest_is_transition'>
   & { weight_kg: number; reps: number };
@@ -285,4 +287,98 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
   const out: number[] = [];
   for (let v = lo; v <= hi + step / 1e6; v += step) out.push(Math.round(v * 1e6) / 1e6);
   return out;
+}
+
+// ---------- Muscles ----------
+
+/**
+ * Working sets per muscle over the last `days` days. A set counts fully for a main muscle and
+ * half for a muscle that's also worked; minor muscles aren't counted.
+ */
+export function muscleSets(
+  workouts: W[], sets: S[], exercises: Map<string, { muscles?: unknown; muscle_group?: string }>,
+  days = 7, now = new Date(),
+): MuscleMap {
+  const from = new Date(now.getTime() - days * 86400000).toISOString();
+  const inRange = new Set(workouts.filter((w) => w.started_at >= from && w.started_at <= now.toISOString()).map((w) => w.id));
+  const out: MuscleMap = {};
+  const cache = new Map<string, MuscleMap>();
+  for (const s of sets) {
+    if (s.is_warmup || !inRange.has(s.workout_id)) continue;
+    let m = cache.get(s.exercise_id);
+    if (!m) { m = resolveMuscles(exercises.get(s.exercise_id)); cache.set(s.exercise_id, m); }
+    for (const [k, w] of Object.entries(m) as [Muscle, number][]) {
+      if (w >= 0.5) out[k] = (out[k] ?? 0) + w;
+    }
+  }
+  return out;
+}
+
+// ---------- Planned days ----------
+
+export type Planned = { kind: 'workout'; dayTypeId: string; index: number } | { kind: 'rest' };
+
+/**
+ * Projects the rotation forward from `start` to `until` (inclusive), assuming you train on each
+ * planned day. Recomputed from your real history every time, so a missed day, an extra workout
+ * or a split change reshuffles the plan automatically.
+ */
+export function plannedDays(
+  split: Pick<Split, 'rotation'>, last: { rotation_index: number; date: string } | null, start: string, until: string,
+): Map<string, Planned> {
+  const out = new Map<string, Planned>();
+  let cur = last;
+  for (let d = start, guard = 0; d <= until && guard < 400; d = addDays(d, 1), guard++) {
+    const r = nextInRotation(split, cur, d);
+    if (r.kind === 'empty') break;
+    if (r.kind === 'workout') {
+      out.set(d, { kind: 'workout', dayTypeId: r.dayTypeId, index: r.index });
+      cur = { rotation_index: r.index, date: d };
+    } else out.set(d, { kind: 'rest' });
+  }
+  return out;
+}
+
+// ---------- One exercise ----------
+
+export interface ExerciseSummary {
+  sessions: { workout: W; sets: S[]; best: S | null }[]; // newest first
+  bestE1rm: { value: number; set: S; date: string } | null;
+  heaviest: { set: S; date: string } | null;
+  /** Most reps at each weight, heaviest weights first. */
+  repRecords: { weight: number; reps: number; date: string; workoutId: string }[];
+  rest: RestPoint[];
+}
+
+export function exerciseSummary(exerciseId: string, workouts: W[], sets: S[]): ExerciseSummary {
+  const mine = sets.filter((s) => s.exercise_id === exerciseId);
+  const byW = new Map(workouts.map((w) => [w.id, w]));
+  const grouped = new Map<string, S[]>();
+  for (const s of mine) if (byW.has(s.workout_id)) grouped.set(s.workout_id, [...(grouped.get(s.workout_id) ?? []), s]);
+  const sessions = [...grouped].map(([id, list]) => {
+    const ordered = list.sort((a, b) => a.set_number - b.set_number);
+    const working = ordered.filter((s) => !s.is_warmup && s.reps > 0);
+    const best = working.reduce<S | null>((b, s) => (!b || epley(s.weight_kg, s.reps) > epley(b.weight_kg, b.reps) ? s : b), null);
+    return { workout: byW.get(id)!, sets: ordered, best };
+  }).sort((a, b) => b.workout.started_at.localeCompare(a.workout.started_at));
+
+  let bestE1rm: ExerciseSummary['bestE1rm'] = null;
+  let heaviest: ExerciseSummary['heaviest'] = null;
+  const reps = new Map<string, { weight: number; reps: number; date: string; workoutId: string }>();
+  for (const { workout, sets: list } of [...sessions].reverse()) {
+    for (const s of list) {
+      if (s.is_warmup || s.reps <= 0) continue;
+      const e = epley(s.weight_kg, s.reps);
+      if (s.weight_kg > 0 && (!bestE1rm || e > bestE1rm.value + 1e-9)) bestE1rm = { value: e, set: s, date: workout.started_at };
+      if (!heaviest || s.weight_kg > heaviest.set.weight_kg + 1e-9) heaviest = { set: s, date: workout.started_at };
+      const k = s.weight_kg.toFixed(2);
+      const r = reps.get(k);
+      if (!r || s.reps > r.reps) reps.set(k, { weight: s.weight_kg, reps: s.reps, date: workout.started_at, workoutId: workout.id });
+    }
+  }
+  return {
+    sessions, bestE1rm, heaviest,
+    repRecords: [...reps.values()].sort((a, b) => b.weight - a.weight),
+    rest: restBySession(workouts, mine),
+  };
 }

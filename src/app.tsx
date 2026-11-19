@@ -10,6 +10,7 @@ import {
   DayTypeEditorScreen, ExerciseEditScreen, ExercisesScreen, PlanScreen, SplitEditorScreen,
 } from './screens/Plan';
 import { SettingsScreen } from './screens/Settings';
+import { ExerciseScreen } from './screens/Exercise';
 
 function match(path: string) {
   const parts = path.split('/').filter(Boolean);
@@ -19,6 +20,7 @@ function match(path: string) {
   if (a === 'w' && b) return { tab: 'history', el: <WorkoutDetailScreen id={b} key={b} /> };
   if (a === 'history') return { tab: 'history', el: <HistoryScreen /> };
   if (a === 'prs') return { tab: 'home', el: <PrsScreen /> };
+  if (a === 'exercise' && b) return { tab: 'plan', el: <ExerciseScreen id={b} key={b} /> };
   if (a === 'plan') {
     if (b === 'split' && c) return { tab: 'plan', el: <SplitEditorScreen id={c} key={c} /> };
     if (b === 'day' && c) return { tab: 'plan', el: <DayTypeEditorScreen id={c} key={c} /> };

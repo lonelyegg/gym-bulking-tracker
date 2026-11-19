@@ -1,20 +1,23 @@
 import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
-import { alive, db, getLocal, setLocal, useLive } from '../db/db';
-import type { DayType } from '../db/schema';
+import { db, getLocal, setLocal, useLive } from '../db/db';
 import { fmtClock, fmtDuration, fmtKg, localDate, round1 } from '../lib/logic';
 import {
-  averageRest, e1rmSeries, liftOptions, prEvents, RANGES, restByExercise, restBySession, splitByRange,
+  averageRest, e1rmSeries, liftOptions, muscleSets, prEvents, RANGES, restByExercise, restBySession, splitByRange,
   weeklyStreak, workoutsByDate, type Range,
 } from '../lib/stats';
+import { MUSCLES, resolveMuscles, type Muscle } from '../lib/muscles';
+import { BodyMap } from '../components/BodyMap';
+import { StartSheet } from '../components/StartSheet';
+import { usePlan } from '../components/usePlan';
 import { settings } from '../state/settings';
 import { useTraining, type TrainingData } from '../state/training';
 import { computeNextUp, getActiveWorkout, startWorkout } from '../state/workout';
 import { MonthCalendar } from '../components/Calendar';
 import { ColumnChart, LineChart } from '../components/charts';
-import { IconFlame, IconPlay, IconTimer, IconTrend, IconTrophy } from '../components/icons';
+import { IconDumbbell, IconFlame, IconPlay, IconTimer, IconTrend, IconTrophy } from '../components/icons';
 import { fmtDay, PrRow } from '../components/PrRow';
-import { go, PageTitle, Section, Segmented, Sheet } from '../components/ui';
+import { go, PageTitle, Section, Segmented } from '../components/ui';
 import { isConfigured } from '../sync/sync';
 import { SyncChip } from './SyncSettings';
 import { historyMonth } from './History';
@@ -23,7 +26,7 @@ import { historyMonth } from './History';
 const homeMonth = signal(localDate().slice(0, 7));
 
 // Category colours for the card headers (text and icons only, never chart data).
-const TONE = { consistency: 'var(--accent)', prs: 'var(--gold)', strength: 'var(--orange)', rest: 'var(--violet)' };
+const TONE = { consistency: 'var(--accent)', prs: 'var(--gold)', muscles: '#ff6b6d', strength: 'var(--orange)', rest: 'var(--violet)' };
 // Chart series colours (single series each; contrast-checked against the card surface).
 const CHART = { strength: '#45e3c8', rest: '#7c8cff' };
 
@@ -67,6 +70,7 @@ export function HomeScreen() {
 
       {data && <Consistency data={data} />}
       {data && <RecentPrs data={data} />}
+      {data && <MuscleVolume data={data} />}
       {data && <Trends data={data} />}
       <div class="bottom-space" />
     </div>
@@ -79,7 +83,6 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
   const active = useLive(async () => (await getActiveWorkout()) ?? null, []);
   const nextUp = useLive(computeNextUp, [settings.value.active_split_id, data?.workouts.length]);
   const dayTypes = useLive(async () => (await db.day_types.toArray()).filter((d) => !d.deleted), []) ?? [];
-  const split = useLive(async () => (settings.value.active_split_id ? db.splits.get(settings.value.active_split_id) : undefined), [settings.value.active_split_id]);
   const tplCounts = useLive(async () => {
     const m: Record<string, number> = {};
     for (const t of await db.template_exercises.toArray()) if (!t.deleted) m[t.day_type_id] = (m[t.day_type_id] ?? 0) + 1;
@@ -98,16 +101,18 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
     return (
       <div class="today-card" style={{ '--c': active.color }}>
         <div class="today-top">
-          <span class="today-kicker live">● In progress</span>
+          <span class="today-kicker live">{active.backfill ? '● Logging a past workout' : '● In progress'}</span>
         </div>
         <div class="today-main">
           <div class="today-icon">{active.icon}</div>
           <div class="grow">
             <div class="today-name">{active.name}</div>
-            <div class="muted small">Started {new Date(active.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</div>
+            <div class="muted small">{active.backfill
+              ? `For ${fmtDay(active.started_at)}`
+              : `Started ${new Date(active.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`}</div>
           </div>
         </div>
-        <button class="btn primary block lg" onClick={() => go('/workout')}><IconPlay /> Resume workout</button>
+        <button class="btn primary block lg" onClick={() => go('/workout')}><IconPlay /> {active.backfill ? 'Continue logging' : 'Resume workout'}</button>
       </div>
     );
   }
@@ -147,29 +152,9 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
         {!isRest && <IconPlay />}{isRest ? 'Train anyway' : d ? `Start ${d.name}` : 'Start empty workout'}
       </button>
 
-      <Sheet open={choose} onClose={() => setChoose(false)} title="Start a workout">
-        <div class="menu-list">
-          {orderedDayTypes(dayTypes, split?.rotation).map((x) => (
-            <button key={x.id} onClick={() => { setChoose(false); start(x.id, idx ?? 0); }}>
-              <span class="day-dot" style={{ background: x.color }}>{x.icon}</span>
-              <span class="grow">{x.name}</span>
-              <span class="muted small">{tplCounts[x.id] ?? 0} exercises</span>
-            </button>
-          ))}
-          <button onClick={() => { setChoose(false); start(null); }}>
-            <span class="day-dot">＋</span><span class="grow">Empty workout</span>
-          </button>
-        </div>
-      </Sheet>
+      <StartSheet open={choose} onClose={() => setChoose(false)} />
     </div>
   );
-}
-
-/** Day types in the active split first, then the rest alphabetically. */
-function orderedDayTypes(all: DayType[], rotation: string[] | undefined): DayType[] {
-  const inSplit = [...new Set(rotation ?? [])].map((id) => all.find((d) => d.id === id)).filter(alive);
-  const others = all.filter((d) => !inSplit.includes(d)).sort((a, b) => a.name.localeCompare(b.name));
-  return [...inSplit, ...others];
 }
 
 // ---------- 2. Consistency ----------
@@ -192,6 +177,7 @@ function Consistency({ data }: { data: TrainingData }) {
   const month = homeMonth.value;
   const setMonth = (m: string) => { homeMonth.value = m; };
   const byDate = useMemo(() => workoutsByDate(data.workouts), [data]);
+  const plan = usePlan(data.workouts);
   const dates = data.workouts.map((w) => localDate(w.started_at));
   const target = settings.value.weekly_target;
   const streak = weeklyStreak(dates, target, today);
@@ -213,8 +199,8 @@ function Consistency({ data }: { data: TrainingData }) {
           <div><div class="tile-value">{inMonth}</div><div class="tile-label">In {monthName}</div></div>
         </div>
       </div>
-      <MonthCalendar month={month} onMonth={setMonth} byDate={byDate} minMonth={dates[0]?.slice(0, 7) ?? today.slice(0, 7)} />
-      <p class="fine">Streak = weeks in a row you hit {target} session{target === 1 ? '' : 's'}. Tap a day to open it.</p>
+      <MonthCalendar month={month} onMonth={setMonth} byDate={byDate} plan={plan} minMonth={dates[0]?.slice(0, 7) ?? today.slice(0, 7)} />
+      <p class="fine">Faded days are your plan; it reshuffles if you skip or swap a day. Tap a day to open it, or a past empty day to log a missed workout. Streak = weeks in a row with {target}+ session{target === 1 ? '' : 's'}.</p>
     </Section>
   );
 }
@@ -228,6 +214,54 @@ function RecentPrs({ data }: { data: TrainingData }) {
       {events.length === 0
         ? <p class="empty-note">Records show up here from your second session of an exercise: heaviest weight, best estimated 1RM, or more reps at a weight.</p>
         : events.slice(0, 4).map((e) => <PrRow key={`${e.workoutId}-${e.exerciseId}`} e={e} exercise={data.exercises.get(e.exerciseId)} />)}
+    </Section>
+  );
+}
+
+// ---------- 3b. Muscles this week ----------
+
+const WEEKLY_FULL = 10; // sets per week that show as full red
+
+function MuscleVolume({ data }: { data: TrainingData }) {
+  const sets = useMemo(() => muscleSets(data.workouts, data.sets, data.exercises), [data]);
+  const [sel, setSel] = useState<Muscle | null>(null);
+  const contributors = useMemo(() => {
+    if (!sel) return [];
+    const from = new Date(Date.now() - 7 * 86400000).toISOString();
+    const recent = new Set(data.workouts.filter((w) => w.started_at >= from).map((w) => w.id));
+    const names = new Map<string, number>();
+    for (const s of data.sets) {
+      if (s.is_warmup || !recent.has(s.workout_id)) continue;
+      const w = resolveMuscles(data.exercises.get(s.exercise_id))[sel] ?? 0;
+      if (w >= 0.5) names.set(s.exercise_id, (names.get(s.exercise_id) ?? 0) + 1);
+    }
+    return [...names].map(([id, n]) => `${data.exercises.get(id)?.name ?? 'Exercise'} ×${n}`);
+  }, [sel, data]);
+  const fmt = (n: number) => (Math.round(n * 2) / 2).toString();
+  if (!data.workouts.length) return null;
+
+  return (
+    <Section title="Muscles · last 7 days" icon={<IconDumbbell size={16} />} tone={TONE.muscles}>
+      <BodyMap values={sets} max={WEEKLY_FULL} label="Working sets per muscle in the last 7 days" onTap={(m) => setSel(sel === m ? null : m)} selected={sel} />
+      <div class="bm-scale"><span>0</span><i /><span>{WEEKLY_FULL}+ sets</span></div>
+      {sel && (
+        <div class="muscle-pick">
+          <b>{MUSCLES.find((m) => m.id === sel)?.label}: {fmt(sets[sel] ?? 0)} sets</b>
+          <span class="muted small">{contributors.length ? contributors.join(' · ') : 'Not trained in the last 7 days.'}</span>
+        </div>
+      )}
+      <div class="mv-grid">
+        {MUSCLES.map((m) => {
+          const v = sets[m.id] ?? 0;
+          return (
+            <button key={m.id} class={`mv-row ${sel === m.id ? 'sel' : ''}`} onClick={() => setSel(sel === m.id ? null : m.id)}>
+              <span class={`grow left ${v ? '' : 'muted'}`}>{m.label}</span>
+              <span class={`num ${v ? 'bold' : 'muted'}`}>{fmt(v)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p class="fine">Sets for each muscle's main exercises count fully; muscles that are only partly worked count half. Many lifters aim for about 10–20 sets per muscle per week when building size.</p>
     </Section>
   );
 }
@@ -297,6 +331,7 @@ function Strength({ data, slice, range }: { data: TrainingData; slice: Slice; ra
           </div>
           {points.length > 1 ? (
             <LineChart
+              key={lift}
               label={`Estimated 1RM, ${name(lift!)}`}
               color={CHART.strength}
               points={points.map((p) => ({ key: p.workoutId, x: Date.parse(p.date), y: p.value }))}
@@ -314,6 +349,7 @@ function Strength({ data, slice, range }: { data: TrainingData; slice: Slice; ra
           ) : <p class="empty-note">One session in this period. The line appears after your next one.</p>}
         </>
       ) : <p class="empty-note">No {name(lift!)} sessions in the last {periodName[range]}. Try a longer range.</p>}
+      <button class="card-link" onClick={() => go(`/exercise/${lift}`)}>{name(lift!)}: records, muscles &amp; history<span class="chev">›</span></button>
     </Section>
   );
 }

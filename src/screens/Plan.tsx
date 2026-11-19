@@ -1,14 +1,16 @@
 import { useState } from 'preact/hooks';
 import { alive, db, patch, put, softDelete, useLive } from '../db/db';
 import {
-  EQUIPMENT, MUSCLE_GROUPS, REST,
-  type DayType, type Equipment, type Exercise, type Mechanic, type MuscleGroup, type TemplateExercise,
+  EQUIPMENT, REST,
+  type DayType, type Equipment, type Exercise, type Mechanic, type TemplateExercise,
 } from '../db/schema';
+import { primaryMuscle, REGIONS, regionOf, resolveMuscles, summaryLine, type MuscleMap } from '../lib/muscles';
+import { MuscleEditor } from '../components/MuscleEditor';
 import { fmtClock, fmtRir } from '../lib/logic';
 import { saveSetting, settings } from '../state/settings';
-import { ExercisePicker, muscleLabel } from '../components/ExercisePicker';
+import { ExercisePicker } from '../components/ExercisePicker';
 import {
-  confirmSheet, DAY_COLORS, DAY_ICONS, go, Header, PageTitle, RirPicker, Sheet, Stepper, toast,
+  back, confirmSheet, DAY_COLORS, DAY_ICONS, go, Header, PageTitle, RirPicker, Sheet, Stepper, toast,
 } from '../components/ui';
 
 const liveDayTypes = async () => (await db.day_types.toArray()).filter((d) => !d.deleted).sort((a, b) => a.name.localeCompare(b.name));
@@ -256,20 +258,21 @@ export function ExercisesScreen() {
   const [q, setQ] = useState('');
   const all = useLive(() => db.exercises.toArray(), []) ?? [];
   const list = all.filter((e) => !e.deleted && (!q || e.name.toLowerCase().includes(q.toLowerCase())));
-  const groups = MUSCLE_GROUPS.map((m) => [m, list.filter((e) => e.muscle_group === m).sort((a, b) => a.name.localeCompare(b.name))] as const)
+  const groups = REGIONS.map((r) => [r, list.filter((e) => regionOf(resolveMuscles(e)) === r.id).sort((a, b) => a.name.localeCompare(b.name))] as const)
     .filter(([, l]) => l.length);
   return (
     <div class="page">
       <Header title="Exercises" back="/plan" right={<button class="btn sm primary" onClick={() => go('/plan/exercise/new')}>New</button>} />
       <input class="search" type="search" placeholder="Search" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
-      {groups.map(([m, l]) => (
-        <section key={m}>
-          <h3 class="section-title">{muscleLabel(m)}</h3>
+      {groups.map(([r, l]) => (
+        <section key={r.id}>
+          <h3 class="section-title">{r.label}</h3>
           {l.map((e) => (
-            <button key={e.id} class="list-item" onClick={() => go(`/plan/exercise/${e.id}`)}>
+            <button key={e.id} class="list-item" onClick={() => go(`/exercise/${e.id}`)}>
               <span class="grow left">
                 <span class="block bold">{e.name}</span>
-                <span class="block muted small">{e.mechanic} · {e.equipment} · +{e.equipment === 'dumbbell' ? 'rack' : `${e.increment_kg} kg`} · rest {fmtClock(e.default_rest_s)}</span>
+                <span class="block muted small ellipsis">{summaryLine(resolveMuscles(e))}</span>
+                <span class="block muted small">{e.equipment} · +{e.equipment === 'dumbbell' ? 'rack' : `${e.increment_kg} kg`} · rest {fmtClock(e.default_rest_s)}</span>
               </span>
               <span class="muted">›</span>
             </button>
@@ -286,8 +289,10 @@ export function ExerciseEditScreen({ id }: { id: string }) {
   if (ex === undefined) return <div class="page" />;
   return (
     <div class="page">
-      <Header title={ex ? 'Edit exercise' : 'New exercise'} back="/plan/exercises" />
-      <ExerciseForm existing={ex ?? undefined} onSaved={() => go('/plan/exercises')} onCancel={() => go('/plan/exercises')} />
+      <Header title={ex ? 'Edit exercise' : 'New exercise'} back />
+      <ExerciseForm existing={ex ?? undefined}
+        onSaved={(saved) => (ex ? back('/plan/exercises') : go(`/exercise/${saved.id}`))}
+        onCancel={() => back('/plan/exercises')} />
       {alive(ex ?? undefined) && (
         <button class="btn ghost block danger-text mt" onClick={async () => {
           if (await confirmSheet(`Delete ${ex!.name}? Past workouts keep their sets.`, 'Delete', true)) {
@@ -303,7 +308,7 @@ export function ExerciseEditScreen({ id }: { id: string }) {
 export function ExerciseForm(props: { existing?: Exercise; initialName?: string; onSaved: (e: Exercise) => void; onCancel: () => void }) {
   const e = props.existing;
   const [name, setName] = useState(e?.name ?? props.initialName ?? '');
-  const [muscle, setMuscle] = useState<MuscleGroup>(e?.muscle_group ?? 'chest');
+  const [muscles, setMuscles] = useState<MuscleMap>(() => (e ? resolveMuscles(e) : {}));
   const [mechanic, setMechanic] = useState<Mechanic>(e?.mechanic ?? 'compound');
   const [equipment, setEquipment] = useState<Equipment>(e?.equipment ?? 'barbell');
   const [inc, setInc] = useState(e?.increment_kg ?? 2.5);
@@ -317,9 +322,11 @@ export function ExerciseForm(props: { existing?: Exercise; initialName?: string;
 
   const save = async () => {
     if (!name.trim()) { toast('Give it a name'); return; }
+    const main = primaryMuscle(muscles);
+    if (!main || !Object.values(muscles).some((w) => w === 1)) { toast('Mark at least one muscle as Main'); return; }
     const [saved] = await put('exercises', {
       ...(e ?? {}),
-      name: name.trim(), muscle_group: muscle, mechanic, equipment, increment_kg: inc,
+      name: name.trim(), muscles, muscle_group: main, mechanic, equipment, increment_kg: inc,
       default_rest_s: restVal, notes: e?.notes ?? '',
     } as Exercise);
     props.onSaved(saved);
@@ -329,10 +336,8 @@ export function ExerciseForm(props: { existing?: Exercise; initialName?: string;
     <div class="form">
       <label>Name</label>
       <input class="input" value={name} onInput={(ev) => setName((ev.currentTarget as HTMLInputElement).value)} />
-      <label>Muscle group</label>
-      <div class="chips wrap">
-        {MUSCLE_GROUPS.map((m) => <button key={m} class={`chip ${muscle === m ? 'on' : ''}`} onClick={() => setMuscle(m)}>{muscleLabel(m)}</button>)}
-      </div>
+      <label>Muscles worked</label>
+      <MuscleEditor value={muscles} onChange={setMuscles} />
       <label>Type</label>
       <div class="chips">
         {(['compound', 'isolation'] as Mechanic[]).map((m) => <button key={m} class={`chip ${mechanic === m ? 'on' : ''}`} onClick={() => setMechanic(m)}>{m}</button>)}

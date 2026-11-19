@@ -1,10 +1,15 @@
-// Month calendar: each training day shows its day-type icon on its colour. Tap a day to open
-// that workout (a picker appears if there were two). Swipe or use the arrows to change month.
+// Month calendar.
+//  - Training days show their day-type icon on its colour. Tap to open the workout.
+//  - Upcoming days show your plan faintly (projected from your real history, so it reshuffles itself).
+//  - Tap an empty day: today → start a workout; a past day → log it afterwards.
+// Swipe or use the arrows to change month.
 import { useRef, useState } from 'preact/hooks';
 import { localDate } from '../lib/logic';
 import { addMonths, monthGrid, type W } from '../lib/stats';
 import { IconChevron, IconChevronLeft } from './icons';
+import { StartSheet } from './StartSheet';
 import { go, Sheet } from './ui';
+import type { PlanCell } from './usePlan';
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -17,22 +22,25 @@ export function MonthCalendar(props: {
   month: string;
   onMonth: (ym: string) => void;
   byDate: Map<string, W[]>;
+  plan?: Map<string, PlanCell>;
   /** Earliest month you can go back to. */
   minMonth?: string;
   size?: 'compact' | 'large';
 }) {
-  const { month, byDate } = props;
+  const { month, byDate, plan } = props;
   const today = localDate();
   const thisMonth = today.slice(0, 7);
+  const maxMonth = plan?.size ? addMonths(thisMonth, 1) : thisMonth;
   const [picking, setPicking] = useState<W[] | null>(null);
+  const [startDate, setStartDate] = useState<string | null>(null);
   const touch = useRef<{ x: number; y: number; swiped: boolean } | null>(null);
   const canPrev = !props.minMonth || month > props.minMonth;
-  const canNext = month < thisMonth;
+  const canNext = month < maxMonth;
 
-  const open = (list: W[] | undefined) => {
-    if (!list?.length) return;
-    if (list.length === 1) go(`/w/${list[0].id}`);
-    else setPicking(list);
+  const tap = (date: string, list: W[] | undefined) => {
+    if (list?.length === 1) go(`/w/${list[0].id}`);
+    else if (list?.length) setPicking(list);
+    else if (date <= today) setStartDate(date);
   };
 
   return (
@@ -61,19 +69,31 @@ export function MonthCalendar(props: {
         {monthGrid(month).flat().map(({ date, inMonth }) => {
           const list = byDate.get(date);
           const w = list?.[0];
+          const p = !w ? plan?.get(date) : undefined;
           const day = Number(date.slice(8));
-          const cls = ['cal-day', inMonth ? '' : 'out', date === today ? 'today' : '', date > today ? 'future' : '', w ? 'trained' : ''].join(' ');
-          const label = `${date}${list ? `: ${list.map((x) => x.name).join(', ')}` : ''}`;
+          const future = date > today;
+          const cls = ['cal-day', inMonth ? '' : 'out', date === today ? 'today' : '', future ? 'future' : '',
+            w ? 'trained' : '', p ? `planned ${p.kind}` : ''].join(' ');
+          const what = list ? list.map((x) => x.name).join(', ') : p ? `planned: ${p.kind === 'rest' ? 'rest day' : p.name}` : future ? '' : 'tap to log a workout';
+          const style = w ? { '--c': w.color } : p?.kind === 'workout' ? { '--c': p.color } : undefined;
           return (
-            <button key={date} class={cls} style={w ? { '--c': w.color } : undefined} aria-label={label}
-              disabled={!w} onClick={() => { if (!touch.current?.swiped) open(list); if (touch.current) touch.current.swiped = false; }}>
+            <button key={date} class={cls} style={style} aria-label={`${date}${what ? `: ${what}` : ''}`}
+              disabled={future && !list}
+              onClick={() => { if (!touch.current?.swiped) tap(date, list); if (touch.current) touch.current.swiped = false; }}>
               <span class="cal-num">{day}</span>
               {w && <span class="cal-icon">{w.icon}</span>}
+              {p?.kind === 'workout' && <span class="cal-icon">{p.icon}</span>}
+              {p?.kind === 'rest' && <span class="cal-rest">rest</span>}
               {list && list.length > 1 && <span class="cal-more">{list.length}</span>}
             </button>
           );
         })}
       </div>
+      {plan && plan.size > 0 && (
+        <div class="cal-key">
+          <span><i class="k-done" />Trained</span><span><i class="k-plan" />Planned</span><span><i class="k-today" />Today</span>
+        </div>
+      )}
 
       <Sheet open={!!picking} onClose={() => setPicking(null)} title="Which workout?">
         <div class="menu-list">
@@ -86,6 +106,7 @@ export function MonthCalendar(props: {
           ))}
         </div>
       </Sheet>
+      <StartSheet open={!!startDate} date={startDate ?? undefined} onClose={() => setStartDate(null)} />
     </div>
   );
 }

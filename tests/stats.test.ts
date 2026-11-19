@@ -139,3 +139,79 @@ describe('ranges + ticks', () => {
     expect(niceTicks(80, 80).length).toBeGreaterThan(1);
   });
 });
+
+import { exerciseSummary, muscleSets, plannedDays } from '../src/lib/stats';
+import { cleanMuscles, heat, primaryMuscle, regionOf, resolveMuscles } from '../src/lib/muscles';
+
+describe('muscles', () => {
+  it('resolves new, legacy and junk data', () => {
+    expect(resolveMuscles({ muscles: { lats: 1, upper_back: 0.5 }, muscle_group: 'lats' })).toEqual({ lats: 1, upper_back: 0.5 });
+    expect(resolveMuscles({ muscle_group: 'back' })).toEqual({ lats: 1, upper_back: 0.5 }); // pre-v0.4 record
+    expect(resolveMuscles({ muscle_group: 'quads' })).toEqual({ quads: 1 });
+    expect(resolveMuscles({ muscles: {}, muscle_group: 'chest' })).toEqual({ chest: 1 });
+    expect(cleanMuscles({ chest: 0.9, bogus: 1, abs: 0.3, calves: 0 })).toEqual({ chest: 1, abs: 0.25 });
+    expect(resolveMuscles(undefined)).toEqual({});
+  });
+  it('primary muscle and region follow body order among the main muscles', () => {
+    const dl = { lower_back: 1, glutes: 1, hamstrings: 1, quads: 0.5 };
+    expect(primaryMuscle(dl)).toBe('lower_back');
+    expect(regionOf(dl)).toBe('back');
+    expect(regionOf({ side_delts: 1 })).toBe('shoulders');
+  });
+  it('heat: grey for zero, three distinct reds, clamps', () => {
+    expect(heat(0)).toBe('#3a3f4a');
+    expect(new Set([heat(0.25), heat(0.5), heat(1)]).size).toBe(3);
+    expect(heat(5)).toBe(heat(1));
+    expect(heat(0.1)).toBe(heat(0.25));
+  });
+  it('weekly sets: main counts 1, also counts ½, minor and warm-ups not at all, last 7 days only', () => {
+    const now = new Date('2026-11-19T12:00:00Z');
+    const ws = [w('recent', '2026-11-17'), w('old', '2026-11-01')];
+    const ex = new Map([['row', { muscles: { lats: 1, biceps: 0.5, forearms: 0.25 } }]]);
+    const sets = [s('recent', 'row', 50, 10), s('recent', 'row', 50, 10), s('recent', 'row', 20, 10, { is_warmup: 1 }), s('old', 'row', 50, 10)];
+    expect(muscleSets(ws, sets, ex, 7, now)).toEqual({ lats: 2, biceps: 1 });
+  });
+});
+
+describe('plannedDays', () => {
+  const split = { rotation: ['push', 'pull', 'legs', 'rest'] };
+  it('projects the rotation, assuming each planned day is trained', () => {
+    const p = plannedDays(split, { rotation_index: 0, date: '2026-11-18' }, '2026-11-19', '2026-11-24');
+    expect([...p.values()].map((x) => (x.kind === 'rest' ? 'rest' : x.dayTypeId))).toEqual(['pull', 'legs', 'rest', 'push', 'pull', 'legs']);
+  });
+  it('a missed day shifts everything (recomputed from real history)', () => {
+    // Pull was planned for the 19th but skipped; looking from the 20th, Pull is still next.
+    const p = plannedDays(split, { rotation_index: 0, date: '2026-11-18' }, '2026-11-20', '2026-11-21');
+    expect([...p.values()].map((x) => (x.kind === 'rest' ? 'rest' : x.dayTypeId))).toEqual(['pull', 'legs']);
+  });
+  it('a missed rest day is not made up', () => {
+    // Legs on the 17th, rest planned the 18th; from the 20th the next workout is Push straight away.
+    const p = plannedDays(split, { rotation_index: 2, date: '2026-11-17' }, '2026-11-20', '2026-11-20');
+    expect(p.get('2026-11-20')).toMatchObject({ kind: 'workout', dayTypeId: 'push' });
+  });
+  it('no history: starts at the first workout; empty split: nothing', () => {
+    expect(plannedDays(split, null, '2026-11-19', '2026-11-19').get('2026-11-19')).toMatchObject({ dayTypeId: 'push' });
+    expect(plannedDays({ rotation: ['rest'] }, null, '2026-11-19', '2026-11-25').size).toBe(0);
+  });
+});
+
+describe('exerciseSummary', () => {
+  it('records, sessions and rep records', () => {
+    const ws = [w('w1', '2026-11-01'), w('w2', '2026-11-05')];
+    const sets = [
+      s('w1', 'b', 60, 10), s('w1', 'b', 60, 8, { rest_before_s: 120 }), s('w1', 'b', 40, 15, { is_warmup: 1 }),
+      s('w2', 'b', 65, 6), s('w2', 'b', 60, 12, { rest_before_s: 150 }),
+      s('w2', 'other', 100, 1),
+    ];
+    const r = exerciseSummary('b', ws, sets);
+    expect(r.sessions.map((x) => x.workout.id)).toEqual(['w2', 'w1']);
+    expect(r.sessions[0].best).toMatchObject({ weight_kg: 60, reps: 12 }); // 84 > 65×6 = 78
+    expect(r.bestE1rm?.value).toBeCloseTo(84);
+    expect(r.heaviest?.set.weight_kg).toBe(65);
+    expect(r.repRecords).toEqual([
+      { weight: 65, reps: 6, date: ws[1].started_at, workoutId: 'w2' },
+      { weight: 60, reps: 12, date: ws[1].started_at, workoutId: 'w2' },
+    ]);
+    expect(r.rest.map((x) => x.value)).toEqual([120, 150]);
+  });
+});

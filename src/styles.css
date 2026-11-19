@@ -367,3 +367,48 @@ main.in-workout { padding-bottom: calc(40px + var(--safe-bottom)); }
 .btn:disabled { opacity: .45; pointer-events: none; }
 .more { margin-top: 10px; }
 .more summary { min-height: 44px; display: flex; align-items: center; color: var(--accent); font-weight: 600; cursor: pointer; }
+
+/* ---------- body map ---------- */
+.bodymap { width: 100%; max-width: 340px; display: block; margin: 0 auto; }
+.bm-skin { fill: #23262d; }
+.bm-muscle { stroke: var(--surface); stroke-width: .7; stroke-linejoin: round; transition: fill .2s; }
+.bm-muscle.tap { cursor: pointer; }
+.bm-muscle.sel { stroke: #fff; stroke-width: 1.2; }
+.bm-caption { fill: var(--muted); font-size: 7px; font-weight: 600; }
+.bm-legend { display: flex; gap: 14px; justify-content: center; font-size: 12px; color: var(--muted); margin: 4px 0 6px; }
+.bm-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.bm-scale { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--muted); margin: 2px 0 8px; }
+.bm-scale i { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #7d3a42, #b8424a 40%, #ff4d4f); }
+.muscle-lines { font-size: 13px; margin: 6px 4px 8px; display: grid; gap: 3px; }
+.ml-key { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+.ml-key.main { background: #ff4d4f; } .ml-key.also { background: #b8424a; } .ml-key.minor { background: #7d3a42; }
+.muscle-pick { background: var(--surface-2); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; display: grid; gap: 2px; font-size: 14px; }
+.mv-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; border-top: 1px solid var(--border); padding-top: 4px; }
+.mv-row { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 14px; border-bottom: 1px solid var(--border); text-align: left; }
+.mv-row.sel { color: var(--accent); }
+.muscle-editor { display: grid; gap: 6px; background: var(--surface-2); border-radius: 14px; padding: 10px; }
+.me-region-label { font-size: 12px; color: var(--muted); font-weight: 650; margin: 4px 0 4px; }
+.me-chip { text-transform: none; display: inline-flex; align-items: center; gap: 6px; background: var(--surface); }
+.me-chip.set { color: #fff; }
+.me-level { font-size: 11px; font-weight: 700; opacity: .85; }
+.card-link { width: 100%; display: flex; align-items: center; justify-content: space-between; min-height: 40px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); color: var(--accent); font-size: 14px; font-weight: 600; text-align: left; }
+.card-link .chev, .ex-link .chev { font-size: 18px; }
+.ex-link { font-weight: 650; color: var(--text); text-align: left; padding: 4px 0; }
+.rec-row { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 42px; border-bottom: 1px solid var(--border); font-size: 15px; }
+.rec-row:last-child { border-bottom: 0; }
+.rec-date { width: 64px; text-align: right; }
+.menu-list .tag { vertical-align: 1px; }
+
+/* calendar: plan */
+.cal-day.planned { background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); opacity: 1; }
+.cal-day.planned.workout { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 8%, transparent); }
+.cal-day.planned .cal-icon { opacity: .45; filter: saturate(.6); }
+.cal-day.planned .cal-num { opacity: .6; font-size: 10px; }
+.cal-rest { font-size: 9px; color: var(--muted); font-weight: 600; opacity: .7; }
+.cal-day.today.planned { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-day:not(.trained):not(.future):not(:disabled):active { background: var(--surface-3); }
+.cal-key { display: flex; gap: 14px; justify-content: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+.cal-key i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.k-done { background: color-mix(in srgb, #ef6c57 45%, var(--surface-2)); }
+.k-plan { box-shadow: inset 0 0 0 1.5px rgba(239,108,87,.5); }
+.k-today { box-shadow: inset 0 0 0 2px var(--accent); }

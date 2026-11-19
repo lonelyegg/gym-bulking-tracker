@@ -2,7 +2,7 @@
 
 A personal, free, phone-first workout and bulking tracker. It's an installable web app (PWA) that works offline and keeps your data on your phone, with optional backup to your own Google Sheet.
 
-**Status: Phase 3 (dashboard).**
+**Status: Phase 3 + extras (muscle model, exercise pages, planned days, logging past workouts).**
 
 | Phase | What | Status |
 |---|---|---|
@@ -40,6 +40,16 @@ Home, top to bottom:
    - **Rest.** Average working rest (between sets of the same exercise) and how it compares with the period before, one column per session, plus per-exercise averages.
 
 **History** has the same calendar, full size, with the month's totals and every session in that month.
+
+## Muscles, exercise pages and planning (v0.4)
+
+- **Muscle model.** Each exercise lists the muscles it trains, out of 18: chest; front, side and rear delts; lats, upper back (rhomboids/mid-traps), traps and lower back (erectors); biceps, triceps and forearms; abs and obliques; quads, hamstrings, glutes, adductors and calves. Each muscle is marked **Main**, **Also worked** or **Minor**. A deadlift, for example, is lower back + glutes + hamstrings (main), quads, adductors, traps and forearms (also), and lats, upper back and abs (minor).
+- **Body map.** Front and back figures shaded grey → red: redder means more targeted. The three reds are a validated one-hue scale, so the levels stay distinguishable.
+- **Exercise page.** Tap a lift in the library, on the Strength card, in a workout summary, or in the workout ⋯ menu (**History & muscles**). It shows the body map, best est. 1RM, heaviest set, session count, the 1RM trend, rep records at each weight, rest between sets, and every session. **Edit** changes the exercise, including its muscles: tap a muscle on the body or in the list to cycle Main → Also → Minor → off.
+- **Muscles · last 7 days** (Home). Working sets per muscle: a set counts 1 for a muscle it mainly trains and ½ for one it also works (minor muscles and warm-ups don't count). Tap a muscle to see which exercises it came from. A common guideline for building size is ~10–20 sets per muscle per week.
+- **Planned days on the calendar.** Upcoming days show your rotation faintly (including rest days). The plan is recalculated from what you actually did every time you open the app, so a skipped day, an extra or different workout, or switching splits reshuffles it automatically. It assumes you'll train on each planned day.
+- **Log a missed workout.** Tap an empty past day on any calendar and pick the workout. It opens the normal workout screen in "logging" mode: no rest timer, sets are stored in order without rest times, the "Previous" column and PRs compare only with workouts *before* that day, and you enter how long it took when you finish. Tapping today's empty day starts a workout, with the one that's due marked.
+- **Older data is upgraded automatically.** Exercises saved before this version get their muscles filled in on first launch (your own edits are kept), and 7 new exercises are added to the library: front raise, reverse pec deck, back extension, barbell shrug, hip adduction machine, cable woodchop and wrist curl. Exercises you deleted are never re-added. No Apps Script change is needed.
 
 ## iPhone: what works and what doesn't
 
@@ -121,7 +131,11 @@ src/
   state/workout.ts    start/log/finish workouts, previous sets, rest tracking
   state/timer.ts      end-time-based rest timer
   state/device.ts     beep (Web Audio + audioSession), wake lock, notifications
-  lib/stats.ts        dashboard maths: calendar grid, streak, PR replay, e1RM series, rest stats
+  lib/stats.ts        dashboard maths: calendar grid, streak, PR replay, e1RM series, rest stats,
+                      weekly sets per muscle, planned-day projection, per-exercise summary
+  lib/muscles.ts      muscle list, weights, legacy upgrade, colour scale
+  components/BodyMap  front/back body figure (bodyPaths.ts holds the shapes)
+  db/migrate.ts       one-time upgrades run at launch
   screens/            Home (dashboard), Workout, History/Summary/PRs, Plan editors, Settings
   components/charts   small SVG line + column charts with tap-to-inspect
   components/         sheet, stepper, RIR picker, timer panel, exercise picker

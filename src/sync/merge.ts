@@ -7,6 +7,7 @@ export type RawRow = Record<string, unknown>;
 
 /** Fields stored as arrays/objects. In the Sheet they are JSON text. */
 export const JSON_FIELDS: Partial<Record<EntityName, string[]>> = {
+  exercises: ['muscles'],
   splits: ['rotation'],
   sets: ['pr_types'],
   saved_meals: ['items'],
@@ -30,7 +31,7 @@ export function normalizeRow(entity: EntityName, raw: unknown): RawRow | null {
     if (typeof v === 'string') {
       try { row[f] = JSON.parse(v); } catch { /* keep the text */ }
     }
-    if (row[f] == null && entity !== 'settings') row[f] = [];
+    if (row[f] == null && entity !== 'settings') row[f] = f === 'muscles' ? {} : [];
   }
   for (const f of TEXT_FIELDS) if (f in row && row[f] == null) row[f] = '';
   return row;

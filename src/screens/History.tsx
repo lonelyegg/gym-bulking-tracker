@@ -8,6 +8,7 @@ import { deleteWorkout, summarize } from '../state/workout';
 import { MonthCalendar, monthLabel } from '../components/Calendar';
 import { IconChevron } from '../components/icons';
 import { fmtDay, PrRow } from '../components/PrRow';
+import { usePlan } from '../components/usePlan';
 import { confirmSheet, go, Header, PageTitle } from '../components/ui';
 
 /** Kept across navigation, so coming back from a workout returns to the same month. */
@@ -17,6 +18,7 @@ export function HistoryScreen() {
   const data = useTraining();
   const month = historyMonth.value;
   const byDate = useMemo(() => (data ? workoutsByDate(data.workouts) : new Map()), [data]);
+  const plan = usePlan(data?.workouts);
   const prCount = useMemo(() => {
     const m = new Map<string, number>();
     if (data) for (const e of prEvents(data.workouts, data.sets)) m.set(e.workoutId, (m.get(e.workoutId) ?? 0) + 1);
@@ -42,7 +44,7 @@ export function HistoryScreen() {
     <div class="page">
       <PageTitle title="History" />
       <section class="card">
-        <MonthCalendar month={month} onMonth={(m) => (historyMonth.value = m)} byDate={byDate} minMonth={first < month ? first : month} size="large" />
+        <MonthCalendar month={month} onMonth={(m) => (historyMonth.value = m)} byDate={byDate} plan={plan} minMonth={first < month ? first : month} size="large" />
       </section>
 
       <div class="stat-grid three">
@@ -140,7 +142,7 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
       {s.perExercise.filter((p) => p.sets.length > 0 || w.status !== 'done').map((p) => (
         <section key={p.we.id} class="card">
           <div class="row between">
-            <span class="bold">{p.exercise?.name}</span>
+            <button class="ex-link" onClick={() => p.exercise && go(`/exercise/${p.exercise.id}`)}>{p.exercise?.name} <span class="chev">›</span></button>
             {p.avgRest != null && <span class="muted small">avg rest {fmtClock(p.avgRest)}</span>}
           </div>
           {p.we.note && <div class="muted small">📝 {p.we.note}</div>}

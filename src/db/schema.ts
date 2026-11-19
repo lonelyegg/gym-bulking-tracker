@@ -8,14 +8,7 @@ export interface Base {
   deleted: 0 | 1;
 }
 
-export type MuscleGroup =
-  | 'chest' | 'back' | 'shoulders' | 'biceps' | 'triceps' | 'forearms'
-  | 'quads' | 'hamstrings' | 'glutes' | 'calves' | 'abs' | 'full_body';
-
-export const MUSCLE_GROUPS: MuscleGroup[] = [
-  'chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms',
-  'quads', 'hamstrings', 'glutes', 'calves', 'abs', 'full_body',
-];
+import type { MuscleMap } from '../lib/muscles';
 
 export type Mechanic = 'compound' | 'isolation';
 export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'other';
@@ -23,7 +16,10 @@ export const EQUIPMENT: Equipment[] = ['barbell', 'dumbbell', 'machine', 'cable'
 
 export interface Exercise extends Base {
   name: string;
-  muscle_group: MuscleGroup;
+  /** Main muscle (for grouping). Older records may hold a legacy broad group like 'back'. */
+  muscle_group: string;
+  /** Muscles trained and how much: 1 main, 0.5 also, 0.25 minor. Missing on records saved before this existed. */
+  muscles?: MuscleMap;
   mechanic: Mechanic;
   equipment: Equipment;
   /** Weight jump for the overload hint. Dumbbells use the dumbbell ladder in settings instead. */
@@ -73,6 +69,8 @@ export interface Workout extends Base {
   ended_at: string | null;
   status: WorkoutStatus;
   notes: string;
+  /** 1 = logged afterwards for a past day (no timers; you set the duration when finishing). */
+  backfill?: 0 | 1;
 }
 
 export interface WorkoutExercise extends Base {

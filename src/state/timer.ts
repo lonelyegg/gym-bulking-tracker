@@ -98,7 +98,7 @@ export async function restoreTimer() {
   }
 }
 
-document.addEventListener('visibilitychange', () => {
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && timer.value) {
     now.value = Date.now();
     schedule();

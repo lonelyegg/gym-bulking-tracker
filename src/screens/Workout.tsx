@@ -37,7 +37,7 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
   const exKey = [...new Set(wes.map((w) => w.exercise_id))].sort().join(',');
   const prevs = useLive(async () => {
     const m: Record<string, PreviousSession | null> = {};
-    for (const id of exKey.split(',').filter(Boolean)) m[id] = await previousSession(id, wid);
+    for (const id of exKey.split(',').filter(Boolean)) m[id] = await previousSession(id, wid, workout.started_at);
     return m;
   }, [exKey, wid]) ?? {};
 
@@ -45,6 +45,8 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
   const [menu, setMenu] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [editing, setEditing] = useState<WorkoutSet | null>(null);
+  const backfill = !!workout.backfill;
+  const [durationMin, setDurationMin] = useState(60);
 
   const elapsed = (now.value - Date.parse(workout.started_at)) / 1000;
   const done = sets.filter((s) => s.completed_at && !s.is_warmup).length;
@@ -53,7 +55,7 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
   const finish = async () => {
     const n = await incompleteSetCount(wid);
     if (n > 0 && !(await confirmSheet(`${n} set${n > 1 ? 's' : ''} not completed will be removed. Finish anyway?`, 'Finish'))) return;
-    await finishWorkout(wid);
+    await finishWorkout(wid, { durationMin });
     go(`/w/${wid}`);
   };
 
@@ -65,7 +67,9 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
           <span class="day-dot" style={{ background: workout.color }}>{workout.icon}</span>
           <span>
             <span class="block bold">{workout.name}</span>
-            <span class="block muted small">{fmtClock(elapsed)} · {done}/{total} sets</span>
+            <span class="block muted small">
+              {backfill ? `Logging ${new Date(workout.started_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : fmtClock(elapsed)} · {done}/{total} sets
+            </span>
           </span>
         </div>
         <div class="topbar-right">
@@ -74,7 +78,7 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
         </div>
       </header>
 
-      <TimerPanel />
+      {!backfill && <TimerPanel />}
 
       {wes.map((we) => (
         <ExerciseCard
@@ -120,12 +124,12 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
       )}
 
       <Sheet open={menu} onClose={() => setMenu(false)} title="Workout">
-        <Toggle
+        {!backfill && <Toggle
           label="Keep screen on"
           hint={wakeLockSupported() ? (wakeLockActive.value ? 'Active — the timer stays reliable.' : 'Not active right now.') : 'Not supported in this browser.'}
           checked={settings.value.wake_lock}
           onChange={(v) => { saveSetting('wake_lock', v); setWakeLock(v); }}
-        />
+        />}
         <button class="btn block danger mt" onClick={async () => {
           setMenu(false);
           if (await confirmSheet('Discard this workout? Everything logged in it will be deleted.', 'Discard', true)) {
@@ -136,7 +140,12 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
       </Sheet>
 
       <Sheet open={finishing} onClose={() => setFinishing(false)} title="Finish workout?">
-        <p class="muted">{done} working sets done in {fmtClock(elapsed)}.</p>
+        {backfill ? (
+          <div class="form">
+            <p class="muted">{done} working sets logged. How long did it take?</p>
+            <Stepper value={durationMin} step={5} min={5} max={300} unit="min" onChange={setDurationMin} />
+          </div>
+        ) : <p class="muted">{done} working sets done in {fmtClock(elapsed)}.</p>}
         <div class="row gap">
           <button class="btn grow" onClick={() => setFinishing(false)}>Keep going</button>
           <button class="btn grow primary" onClick={() => { setFinishing(false); finish(); }}>Finish</button>
@@ -286,6 +295,7 @@ function ExerciseCard(props: {
         <div class="menu-list">
           <button onClick={() => { setMenu(false); addSet(we, true); }}>Add warm-up set</button>
           <button onClick={() => { setMenu(false); setShowNote(true); }}>{we.note ? 'Edit note' : 'Add note'}</button>
+          {exercise && <button onClick={() => { setMenu(false); go(`/exercise/${exercise.id}`); }}>History &amp; muscles</button>}
           <button onClick={() => { setMenu(false); setTargets(true); }}>Edit targets &amp; rest</button>
           <button onClick={() => { setMenu(false); props.onSwap(); }}>Swap exercise</button>
           {!props.isFirst && <button onClick={() => { setMenu(false); moveExercise(we, -1); }}>Move up</button>}

@@ -130,7 +130,7 @@ export async function setWakeLock(on: boolean) {
   }
 }
 
-document.addEventListener('visibilitychange', () => {
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') acquire();
 });
 

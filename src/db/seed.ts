@@ -1,7 +1,8 @@
 import { db } from './db';
 import type {
-  DayType, Equipment, Exercise, Mechanic, MuscleGroup, Split, TemplateExercise,
+  DayType, Equipment, Exercise, Mechanic, Split, TemplateExercise,
 } from './schema';
+import { primaryMuscle, type MuscleMap } from '../lib/muscles';
 import { REST } from './schema';
 
 // Seed records use fixed IDs and an old timestamp. If you restore from the Sheet
@@ -11,69 +12,75 @@ const base = (id: string) => ({ id, created_at: SEED_TS, updated_at: SEED_TS, de
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-// name, muscle, mechanic, equipment, increment (kg)
-type ExSeed = [string, MuscleGroup, Mechanic, Equipment, number?];
-const EXERCISES: ExSeed[] = [
+// name, muscles (main 1 / also .5 / minor .25), mechanic, equipment, increment (kg)
+type ExSeed = [string, MuscleMap, Mechanic, Equipment, number?];
+export const EXERCISES: ExSeed[] = [
   // Chest
-  ['Barbell Bench Press', 'chest', 'compound', 'barbell'],
-  ['Incline Barbell Bench Press', 'chest', 'compound', 'barbell'],
-  ['Dumbbell Bench Press', 'chest', 'compound', 'dumbbell'],
-  ['Incline Dumbbell Press', 'chest', 'compound', 'dumbbell'],
-  ['Machine Chest Press', 'chest', 'compound', 'machine', 7],
-  ['Cable Fly', 'chest', 'isolation', 'cable'],
-  ['Pec Deck', 'chest', 'isolation', 'machine', 7],
-  ['Dips', 'chest', 'compound', 'bodyweight'],
-  ['Push-up', 'chest', 'compound', 'bodyweight'],
+  ['Barbell Bench Press', { chest: 1, front_delts: 0.5, triceps: 0.5 }, 'compound', 'barbell'],
+  ['Incline Barbell Bench Press', { chest: 1, front_delts: 0.5, triceps: 0.5 }, 'compound', 'barbell'],
+  ['Dumbbell Bench Press', { chest: 1, front_delts: 0.5, triceps: 0.5 }, 'compound', 'dumbbell'],
+  ['Incline Dumbbell Press', { chest: 1, front_delts: 0.5, triceps: 0.25 }, 'compound', 'dumbbell'],
+  ['Machine Chest Press', { chest: 1, front_delts: 0.5, triceps: 0.5 }, 'compound', 'machine', 7],
+  ['Cable Fly', { chest: 1, front_delts: 0.25 }, 'isolation', 'cable'],
+  ['Pec Deck', { chest: 1, front_delts: 0.25 }, 'isolation', 'machine', 7],
+  ['Dips', { chest: 1, triceps: 0.5, front_delts: 0.5 }, 'compound', 'bodyweight'],
+  ['Push-up', { chest: 1, triceps: 0.5, front_delts: 0.5, abs: 0.25 }, 'compound', 'bodyweight'],
   // Back
-  ['Deadlift', 'back', 'compound', 'barbell'],
-  ['Barbell Row', 'back', 'compound', 'barbell'],
-  ['Pull-up', 'back', 'compound', 'bodyweight'],
-  ['Chin-up', 'back', 'compound', 'bodyweight'],
-  ['Lat Pulldown', 'back', 'compound', 'machine', 7],
-  ['Seated Cable Row', 'back', 'compound', 'cable'],
-  ['One-Arm Dumbbell Row', 'back', 'compound', 'dumbbell'],
-  ['Chest-Supported Machine Row', 'back', 'compound', 'machine', 7],
-  ['Straight-Arm Pulldown', 'back', 'isolation', 'cable'],
-  ['Dumbbell Shrug', 'back', 'isolation', 'dumbbell'],
+  ['Deadlift', { lower_back: 1, glutes: 1, hamstrings: 1, quads: 0.5, adductors: 0.5, traps: 0.5, forearms: 0.5, lats: 0.25, upper_back: 0.25, abs: 0.25, obliques: 0.25 }, 'compound', 'barbell'],
+  ['Barbell Row', { lats: 1, upper_back: 1, rear_delts: 0.5, biceps: 0.5, lower_back: 0.5, traps: 0.25, forearms: 0.25 }, 'compound', 'barbell'],
+  ['Pull-up', { lats: 1, biceps: 0.5, upper_back: 0.5, rear_delts: 0.25, forearms: 0.25, abs: 0.25 }, 'compound', 'bodyweight'],
+  ['Chin-up', { lats: 1, biceps: 1, upper_back: 0.5, forearms: 0.25 }, 'compound', 'bodyweight'],
+  ['Lat Pulldown', { lats: 1, biceps: 0.5, upper_back: 0.5, rear_delts: 0.25 }, 'compound', 'machine', 7],
+  ['Seated Cable Row', { upper_back: 1, lats: 1, rear_delts: 0.5, biceps: 0.5, lower_back: 0.25 }, 'compound', 'cable'],
+  ['One-Arm Dumbbell Row', { lats: 1, upper_back: 0.5, rear_delts: 0.5, biceps: 0.5 }, 'compound', 'dumbbell'],
+  ['Chest-Supported Machine Row', { upper_back: 1, lats: 0.5, rear_delts: 0.5, biceps: 0.5 }, 'compound', 'machine', 7],
+  ['Straight-Arm Pulldown', { lats: 1, triceps: 0.25, abs: 0.25 }, 'isolation', 'cable'],
+  ['Dumbbell Shrug', { traps: 1, forearms: 0.25 }, 'isolation', 'dumbbell'],
+  ['Barbell Shrug', { traps: 1, forearms: 0.25 }, 'isolation', 'barbell'],
+  ['Back Extension', { lower_back: 1, glutes: 0.5, hamstrings: 0.5 }, 'isolation', 'bodyweight'],
   // Shoulders
-  ['Overhead Press', 'shoulders', 'compound', 'barbell'],
-  ['Seated Dumbbell Shoulder Press', 'shoulders', 'compound', 'dumbbell'],
-  ['Lateral Raise', 'shoulders', 'isolation', 'dumbbell'],
-  ['Cable Lateral Raise', 'shoulders', 'isolation', 'cable'],
-  ['Rear Delt Fly', 'shoulders', 'isolation', 'dumbbell'],
-  ['Face Pull', 'shoulders', 'isolation', 'cable'],
-  // Biceps
-  ['Barbell Curl', 'biceps', 'isolation', 'barbell'],
-  ['Dumbbell Curl', 'biceps', 'isolation', 'dumbbell'],
-  ['Hammer Curl', 'biceps', 'isolation', 'dumbbell'],
-  ['Incline Dumbbell Curl', 'biceps', 'isolation', 'dumbbell'],
-  ['Cable Curl', 'biceps', 'isolation', 'cable'],
-  ['Preacher Curl Machine', 'biceps', 'isolation', 'machine', 7],
-  // Triceps
-  ['Triceps Pushdown', 'triceps', 'isolation', 'cable'],
-  ['Overhead Cable Triceps Extension', 'triceps', 'isolation', 'cable'],
-  ['Skull Crusher', 'triceps', 'isolation', 'barbell'],
-  ['Close-Grip Bench Press', 'triceps', 'compound', 'barbell'],
+  ['Overhead Press', { front_delts: 1, side_delts: 0.5, triceps: 0.5, traps: 0.25, abs: 0.25 }, 'compound', 'barbell'],
+  ['Seated Dumbbell Shoulder Press', { front_delts: 1, side_delts: 0.5, triceps: 0.5 }, 'compound', 'dumbbell'],
+  ['Lateral Raise', { side_delts: 1, front_delts: 0.25, traps: 0.25 }, 'isolation', 'dumbbell'],
+  ['Cable Lateral Raise', { side_delts: 1, front_delts: 0.25, traps: 0.25 }, 'isolation', 'cable'],
+  ['Front Raise', { front_delts: 1, side_delts: 0.25 }, 'isolation', 'dumbbell'],
+  ['Rear Delt Fly', { rear_delts: 1, upper_back: 0.5 }, 'isolation', 'dumbbell'],
+  ['Reverse Pec Deck', { rear_delts: 1, upper_back: 0.5 }, 'isolation', 'machine', 7],
+  ['Face Pull', { rear_delts: 1, upper_back: 0.5, traps: 0.25 }, 'isolation', 'cable'],
+  // Arms
+  ['Barbell Curl', { biceps: 1, forearms: 0.5 }, 'isolation', 'barbell'],
+  ['Dumbbell Curl', { biceps: 1, forearms: 0.5 }, 'isolation', 'dumbbell'],
+  ['Hammer Curl', { biceps: 1, forearms: 1 }, 'isolation', 'dumbbell'],
+  ['Incline Dumbbell Curl', { biceps: 1, forearms: 0.25 }, 'isolation', 'dumbbell'],
+  ['Cable Curl', { biceps: 1, forearms: 0.25 }, 'isolation', 'cable'],
+  ['Preacher Curl Machine', { biceps: 1 }, 'isolation', 'machine', 7],
+  ['Triceps Pushdown', { triceps: 1 }, 'isolation', 'cable'],
+  ['Overhead Cable Triceps Extension', { triceps: 1 }, 'isolation', 'cable'],
+  ['Skull Crusher', { triceps: 1 }, 'isolation', 'barbell'],
+  ['Close-Grip Bench Press', { triceps: 1, chest: 0.5, front_delts: 0.5 }, 'compound', 'barbell'],
+  ['Wrist Curl', { forearms: 1 }, 'isolation', 'dumbbell'],
   // Legs
-  ['Back Squat', 'quads', 'compound', 'barbell'],
-  ['Front Squat', 'quads', 'compound', 'barbell'],
-  ['Leg Press', 'quads', 'compound', 'machine', 5],
-  ['Hack Squat', 'quads', 'compound', 'machine', 5],
-  ['Bulgarian Split Squat', 'quads', 'compound', 'dumbbell'],
-  ['Walking Lunge', 'quads', 'compound', 'dumbbell'],
-  ['Leg Extension', 'quads', 'isolation', 'machine', 7],
-  ['Romanian Deadlift', 'hamstrings', 'compound', 'barbell'],
-  ['Lying Leg Curl', 'hamstrings', 'isolation', 'machine', 7],
-  ['Seated Leg Curl', 'hamstrings', 'isolation', 'machine', 7],
-  ['Hip Thrust', 'glutes', 'compound', 'barbell'],
-  ['Standing Calf Raise', 'calves', 'isolation', 'machine', 7],
-  ['Seated Calf Raise', 'calves', 'isolation', 'machine', 7],
-  // Abs
-  ['Cable Crunch', 'abs', 'isolation', 'cable'],
-  ['Hanging Leg Raise', 'abs', 'isolation', 'bodyweight'],
+  ['Back Squat', { quads: 1, glutes: 1, adductors: 0.5, lower_back: 0.5, hamstrings: 0.25, abs: 0.25 }, 'compound', 'barbell'],
+  ['Front Squat', { quads: 1, glutes: 0.5, abs: 0.5, upper_back: 0.25, lower_back: 0.25, adductors: 0.25 }, 'compound', 'barbell'],
+  ['Leg Press', { quads: 1, glutes: 0.5, adductors: 0.5, hamstrings: 0.25 }, 'compound', 'machine', 5],
+  ['Hack Squat', { quads: 1, glutes: 0.5, adductors: 0.25 }, 'compound', 'machine', 5],
+  ['Bulgarian Split Squat', { quads: 1, glutes: 1, adductors: 0.5, hamstrings: 0.25 }, 'compound', 'dumbbell'],
+  ['Walking Lunge', { quads: 1, glutes: 1, hamstrings: 0.5, adductors: 0.5, calves: 0.25 }, 'compound', 'dumbbell'],
+  ['Leg Extension', { quads: 1 }, 'isolation', 'machine', 7],
+  ['Romanian Deadlift', { hamstrings: 1, glutes: 1, lower_back: 0.5, adductors: 0.5, forearms: 0.25 }, 'compound', 'barbell'],
+  ['Lying Leg Curl', { hamstrings: 1, calves: 0.25 }, 'isolation', 'machine', 7],
+  ['Seated Leg Curl', { hamstrings: 1 }, 'isolation', 'machine', 7],
+  ['Hip Thrust', { glutes: 1, hamstrings: 0.5, quads: 0.25 }, 'compound', 'barbell'],
+  ['Hip Adduction Machine', { adductors: 1 }, 'isolation', 'machine', 7],
+  ['Standing Calf Raise', { calves: 1 }, 'isolation', 'machine', 7],
+  ['Seated Calf Raise', { calves: 1 }, 'isolation', 'machine', 7],
+  // Core
+  ['Cable Crunch', { abs: 1, obliques: 0.5 }, 'isolation', 'cable'],
+  ['Hanging Leg Raise', { abs: 1, obliques: 0.5, forearms: 0.25 }, 'isolation', 'bodyweight'],
+  ['Cable Woodchop', { obliques: 1, abs: 0.5 }, 'isolation', 'cable'],
 ];
 
-const exId = (name: string) => `ex-${slug(name)}`;
+export const exId = (name: string) => `ex-${slug(name)}`;
 
 // exercise name, sets, rep_min, rep_max, target RIR
 type TplSeed = [string, number, number, number, number];
@@ -142,9 +149,9 @@ const SPLITS: { key: string; name: string; rotation: string[] }[] = [
 ];
 
 export function buildSeed(compoundRest = 150, isolationRest = 90) {
-  const exercises: Exercise[] = EXERCISES.map(([name, muscle_group, mechanic, equipment, inc]) => ({
+  const exercises: Exercise[] = EXERCISES.map(([name, muscles, mechanic, equipment, inc]) => ({
     ...base(exId(name)),
-    name, muscle_group, mechanic, equipment,
+    name, muscles, muscle_group: primaryMuscle(muscles)!, mechanic, equipment,
     increment_kg: inc ?? 2.5,
     default_rest_s: mechanic === 'compound' ? compoundRest : isolationRest,
     notes: '',

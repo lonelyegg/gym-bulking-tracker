@@ -5,15 +5,17 @@ import { useMemo, useState } from 'preact/hooks';
 import { db, put, softDelete, useLive } from '../db/db';
 import type { Food, FoodLog, Meal } from '../db/schema';
 import { localDate } from '../lib/logic';
-import { canUseGrams, canUseServings, dayTotals, defaultAmount, nutrientsFor, rankFoods } from '../lib/nutrition';
+import {
+  canUseGrams, canUseServings, dayTotals, defaultAmount, fromRestaurant, groupByRestaurant, matchesSearch, nutrientsFor, rankFoods, restaurants,
+} from '../lib/nutrition';
 import { addDays } from '../lib/stats';
 import {
-  copyDay, deleteLog, deleteMeal, finishMeal, logFood, logSavedMeal, saveMealAsTemplate, setMealTimes,
-  updateLog, useFoodDay, useFoods, useSavedMeals,
+  copyDay, deleteLog, deleteMeal, finishMeal, logFood, logSavedMeal, quickAdd, saveMealAsTemplate, setMealTimes,
+  updateLog, updateQuick, useFoodDay, useFoods, useSavedMeals, type QuickEntry,
 } from '../state/food';
 import { FoodBars, TargetsForm } from '../components/nutrition';
 import { IconChevron, IconChevronLeft, IconPlus } from '../components/icons';
-import { confirmSheet, go, Header, PageTitle, promptSheet, Segmented, Sheet, Stepper, toast } from '../components/ui';
+import { confirmSheet, go, Header, PageTitle, promptSheet, Segmented, Sheet, Stepper, Toggle, toast } from '../components/ui';
 
 /** The day you're looking at (kept while you navigate away and back). */
 export const foodDate = signal(localDate());
@@ -95,7 +97,7 @@ export function FoodScreen() {
         <section class="card">
           <div class="bold">Other</div>
           {day.logs.filter((l) => !day.meals.some((m) => m.id === l.meal_id)).map((l) => (
-            <LogRow key={l.id} log={l} food={foodById.get(l.food_id)} onClick={() => setEditing(l)} />
+            <LogRow key={l.id} log={l} food={l.food_id ? foodById.get(l.food_id) : undefined} onClick={() => setEditing(l)} />
           ))}
         </section>
       )}
@@ -107,7 +109,7 @@ export function FoodScreen() {
       <div class="bottom-space" />
 
       {adding && <AddFoodSheet date={date} mealId={adding.mealId} foods={foods} onClose={() => setAdding(null)} />}
-      {editing && <EditLogSheet log={editing} food={foodById.get(editing.food_id)} onClose={() => setEditing(null)} />}
+      {editing && <EditLogSheet log={editing} food={editing.food_id ? foodById.get(editing.food_id) : undefined} onClose={() => setEditing(null)} />}
       {times && <TimesSheet meal={times} onClose={() => setTimes(null)} />}
       <Sheet open={targets} onClose={() => setTargets(false)} title="Targets"><TargetsForm /></Sheet>
       <SavedMealsSheet open={manageSaved} onClose={() => setManageSaved(false)} foods={foodById} />
@@ -119,8 +121,8 @@ function LogRow({ log, food, onClick }: { log: FoodLog; food: Food | undefined; 
   return (
     <button class="log-row" onClick={onClick}>
       <span class="grow left">
-        <span class="block ellipsis">{food?.name ?? 'Deleted food'}</span>
-        <span class="block muted small">{amountText(food, log.amount, log.unit)}</span>
+        <span class="block ellipsis">{food?.name ?? log.name ?? 'Deleted food'}</span>
+        <span class="block muted small">{!log.food_id ? 'one-time entry' : `${amountText(food, log.amount, log.unit)}${food?.restaurant ? ` · ${food.restaurant}` : ''}`}</span>
       </span>
       <span class="right">
         <span class="block num">{r0(log.kcal)} kcal</span>
@@ -154,7 +156,7 @@ function MealCard(props: {
         </span>
       </div>
       {eating && <button class="btn primary block sm" onClick={() => finishMeal(meal)}>Finish meal</button>}
-      {logs.map((l) => <LogRow key={l.id} log={l} food={props.foods.get(l.food_id)} onClick={() => props.onEdit(l)} />)}
+      {logs.map((l) => <LogRow key={l.id} log={l} food={l.food_id ? props.foods.get(l.food_id) : undefined} onClick={() => props.onEdit(l)} />)}
       <div class="meal-actions">
         <button class="link" onClick={props.onAdd}>+ Add food</button>
         <button class="link muted-link" onClick={() => setMenu(true)}>Edit</button>
@@ -244,23 +246,66 @@ function AmountForm(props: {
   );
 }
 
+/** A one-time entry: name (optional) and its numbers, without saving it to My foods. */
+function QuickAddForm(props: {
+  initial?: QuickEntry; submit: string; allowSave?: boolean;
+  onSubmit: (e: QuickEntry, saveToFoods: boolean) => void; onDelete?: () => void;
+}) {
+  const i = props.initial;
+  const [name, setName] = useState(i?.name ?? '');
+  const [kcal, setKcal] = useState<number | null>(i?.kcal ?? null);
+  const [protein, setProtein] = useState<number | null>(i?.protein_g ?? null);
+  const [carbs, setCarbs] = useState<number | null>(i?.carbs_g ?? null);
+  const [fat, setFat] = useState<number | null>(i?.fat_g ?? null);
+  const [save, setSave] = useState(false);
+  return (
+    <div class="form">
+      {props.allowSave && <p class="muted small">For something you won’t eat again. Estimates are fine; it isn’t added to My foods.</p>}
+      <label>What was it? (optional)</label>
+      <input class="input" value={name} placeholder="e.g. Birthday cake" onInput={(ev) => setName((ev.currentTarget as HTMLInputElement).value)} />
+      <label>Calories</label>
+      <Stepper value={kcal} step={50} min={0} max={5000} unit="kcal" placeholder="0" onChange={setKcal}
+        onInc={(c) => setKcal(Math.min(5000, (c ?? 0) + 50))} onDec={(c) => setKcal(Math.max(0, (c ?? 0) - 50))} />
+      <label>Protein</label>
+      <Stepper value={protein} step={5} min={0} max={500} decimals unit="g" placeholder="0" onChange={setProtein} />
+      <label>Carbs and fat (optional)</label>
+      <div class="row gap">
+        <Stepper value={carbs} step={5} min={0} max={500} decimals unit="C" placeholder="–" onChange={setCarbs} />
+        <Stepper value={fat} step={5} min={0} max={500} decimals unit="F" placeholder="–" onChange={setFat} />
+      </div>
+      {props.allowSave && <Toggle label="Also save to My foods" hint="Turn on if you might have it again." checked={save} onChange={setSave} />}
+      <div class="row gap mt">
+        {props.onDelete && <button class="btn danger-outline" onClick={props.onDelete}>Delete</button>}
+        <button class="btn grow primary" disabled={kcal == null}
+          onClick={() => kcal != null && props.onSubmit({ name, kcal, protein_g: protein ?? 0, carbs_g: carbs, fat_g: fat }, save)}>{props.submit}</button>
+      </div>
+    </div>
+  );
+}
+
 function AddFoodSheet(props: { date: string; mealId?: string; foods: Food[]; onClose: () => void }) {
   const [q, setQ] = useState('');
+  const [place, setPlace] = useState<string | null>(null);
   const [food, setFood] = useState<Food | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState<'pick' | 'new' | 'quick'>('pick');
   const loaded = useLive(async () => (await db.food_logs.toArray()).filter((l) => !l.deleted), []);
   const logs = loaded ?? [];
+  const places = useMemo(() => restaurants(props.foods), [props.foods]);
+  const pool = useMemo(() => props.foods.filter((f) => fromRestaurant(f, place)), [props.foods, place]);
   // Wait for your history before showing the list, so it never reorders under your finger.
-  const ranked = useMemo(() => rankFoods(props.foods, loaded ?? []), [props.foods, loaded]);
+  const ranked = useMemo(() => rankFoods(pool, loaded ?? []), [pool, loaded]);
   const lastOf = (id: string) => logs.filter((l) => l.food_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-  const match = (f: Food) => f.name.toLowerCase().includes(q.trim().toLowerCase());
   const per = (f: Food) => `${r0(f.kcal)} kcal · ${r1(f.protein_g)} g protein per ${f.basis === 'per_100g' ? '100 g' : f.serving_label || 'serving'}`;
   const Row = ({ f }: { f: Food }) => (
-    <button class="pick-item" onClick={() => setFood(f)}><span class="bold">{f.name}</span><span class="muted small">{per(f)}</span></button>
+    <button class="pick-item" onClick={() => setFood(f)}>
+      <span class="bold">{f.name}</span>
+      <span class="muted small">{place == null && f.restaurant ? `${f.restaurant} · ` : ''}{per(f)}</span>
+    </button>
   );
+  const title = food ? food.name : mode === 'new' ? 'New food' : mode === 'quick' ? 'Quick add' : 'Add food';
 
   return (
-    <Sheet open onClose={props.onClose} title={food ? food.name : creating ? 'New food' : 'Add food'}>
+    <Sheet open onClose={props.onClose} title={title}>
       {food ? (
         <AmountForm food={food} initial={defaultAmount(food, lastOf(food.id))} submit="Add"
           onSubmit={async (amount, unit) => {
@@ -268,20 +313,45 @@ function AddFoodSheet(props: { date: string; mealId?: string; foods: Food[]; onC
             toast(`${food.name} added ✓`);
             props.onClose();
           }} />
-      ) : creating ? (
-        <FoodForm initialName={q} onSaved={(f) => { setCreating(false); setFood(f); }} onCancel={() => setCreating(false)} />
+      ) : mode === 'new' ? (
+        <FoodForm initialName={q} initialRestaurant={place} onSaved={(f) => { setMode('pick'); setFood(f); }} onCancel={() => setMode('pick')} />
+      ) : mode === 'quick' ? (
+        <QuickAddForm submit="Add" allowSave initial={q.trim() ? { name: q.trim(), kcal: 0, protein_g: 0, carbs_g: null, fat_g: null } : undefined}
+          onSubmit={async (entry, saveToFoods) => {
+            if (saveToFoods) {
+              const [f] = await put('foods', {
+                name: entry.name.trim() || 'Quick add', basis: 'per_serving', serving_g: null, serving_label: '',
+                kcal: entry.kcal, protein_g: entry.protein_g, carbs_g: entry.carbs_g, fat_g: entry.fat_g, restaurant: place,
+              });
+              await logFood(f, 1, 'serving', { date: props.date, mealId: props.mealId });
+            } else {
+              await quickAdd(entry, { date: props.date, mealId: props.mealId });
+            }
+            toast(`${entry.name.trim() || 'Quick add'} added ✓`);
+            props.onClose();
+          }} />
       ) : (
         <>
-          <input class="search" type="search" placeholder="Search your foods" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
+          <input class="search" type="search" placeholder={places.length ? 'Search foods or restaurants' : 'Search your foods'} value={q}
+            onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
+          {places.length > 0 && (
+            <div class="chips scroll-x place-chips">
+              <button class={`chip ${place == null ? 'on' : ''}`} onClick={() => setPlace(null)}>All</button>
+              {places.map((r) => <button key={r} class={`chip ${place === r ? 'on' : ''}`} onClick={() => setPlace(place === r ? null : r)}>{r}</button>)}
+            </div>
+          )}
+          <div class="row gap add-modes">
+            <button class="btn grow sm" onClick={() => setMode('quick')}>⚡ Quick add</button>
+            <button class="btn grow sm" onClick={() => setMode('new')}>＋ New food</button>
+          </div>
           <div class="pick-list">
-            {loaded === undefined ? null : q.trim() ? props.foods.filter(match).map((f) => <Row key={f.id} f={f} />) : (<>
-              {ranked.recent.length > 0 && <div class="pick-group">Recent</div>}
+            {loaded === undefined ? null : q.trim() ? pool.filter((f) => matchesSearch(f, q)).map((f) => <Row key={f.id} f={f} />) : (<>
+              {ranked.recent.length > 0 && <div class="pick-group">Recent{place ? ` at ${place}` : ''}</div>}
               {ranked.recent.map((f) => <Row key={f.id} f={f} />)}
-              {ranked.others.length > 0 && <div class="pick-group">{ranked.recent.length ? 'All foods' : 'Your foods'}</div>}
+              {ranked.others.length > 0 && <div class="pick-group">{ranked.recent.length ? 'More' : place ?? 'Your foods'}</div>}
               {ranked.others.map((f) => <Row key={f.id} f={f} />)}
             </>)}
-            {!props.foods.length && <p class="empty-note">Add the foods you eat regularly once; after that, logging is a couple of taps.</p>}
-            <button class="pick-item accent" onClick={() => setCreating(true)}>+ New food{q.trim() ? ` “${q.trim()}”` : ''}</button>
+            {!props.foods.length && <p class="empty-note">Save foods you eat regularly once (logging is then a couple of taps), or use Quick add for one-offs.</p>}
           </div>
         </>
       )}
@@ -290,9 +360,18 @@ function AddFoodSheet(props: { date: string; mealId?: string; foods: Food[]; onC
 }
 
 function EditLogSheet({ log, food, onClose }: { log: FoodLog; food: Food | undefined; onClose: () => void }) {
+  if (!log.food_id) {
+    return (
+      <Sheet open onClose={onClose} title={log.name || 'Quick add'}>
+        <QuickAddForm submit="Save" initial={{ name: log.name ?? '', kcal: log.kcal, protein_g: log.protein_g, carbs_g: log.carbs_g, fat_g: log.fat_g }}
+          onSubmit={async (entry) => { await updateQuick(log, entry); onClose(); }}
+          onDelete={async () => { await deleteLog(log); onClose(); }} />
+      </Sheet>
+    );
+  }
   // If the food was deleted, edit against what was recorded.
   const f: Food = food ?? {
-    id: log.food_id, name: 'Deleted food', basis: log.unit === 'g' ? 'per_100g' : 'per_serving', serving_g: null, serving_label: '',
+    id: log.food_id, name: log.name ?? 'Deleted food', basis: log.unit === 'g' ? 'per_100g' : 'per_serving', serving_g: null, serving_label: '',
     kcal: log.unit === 'g' ? (log.kcal / log.amount) * 100 : log.kcal / log.amount,
     protein_g: log.unit === 'g' ? (log.protein_g / log.amount) * 100 : log.protein_g / log.amount,
     carbs_g: null, fat_g: null, created_at: '', updated_at: '', deleted: 1,
@@ -313,6 +392,7 @@ function SavedMealsSheet({ open, onClose, foods }: { open: boolean; onClose: () 
       {!saved.length && <p class="muted">Log a meal, then tap <b>Edit → Save as a saved meal</b>. It then appears as a one-tap button above your meals.</p>}
       {saved.map((m) => {
         const totals = m.items.reduce((a, it) => {
+          if (!it.food_id) return { kcal: a.kcal + (it.kcal ?? 0), p: a.p + (it.protein_g ?? 0) };
           const f = foods.get(it.food_id);
           const n = f ? nutrientsFor(f, it.amount, it.unit) : null;
           return { kcal: a.kcal + (n?.kcal ?? 0), p: a.p + (n?.protein_g ?? 0) };
@@ -321,7 +401,7 @@ function SavedMealsSheet({ open, onClose, foods }: { open: boolean; onClose: () 
           <div key={m.id} class="list-item static">
             <span class="grow left">
               <span class="block bold">{m.name}</span>
-              <span class="block muted small ellipsis">{m.items.map((it) => foods.get(it.food_id)?.name ?? 'deleted food').join(', ')}</span>
+              <span class="block muted small ellipsis">{m.items.map((it) => (it.food_id ? foods.get(it.food_id)?.name ?? 'deleted food' : it.name || 'Quick add')).join(', ')}</span>
               <span class="block muted small">{r0(totals.kcal)} kcal · {r1(totals.p)} g protein</span>
             </span>
             <button class="icon-btn sm" aria-label={`Rename ${m.name}`} onClick={async () => { const n = await promptSheet('Rename saved meal', m.name); if (n) await put('saved_meals', { ...m, name: n }); }}>✎</button>
@@ -339,20 +419,26 @@ export function FoodsScreen() {
   const foods = useFoods() ?? [];
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<Food | 'new' | null>(null);
-  const list = foods.filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase()));
+  const groups = groupByRestaurant(foods.filter((f) => matchesSearch(f, q)));
+  const hasPlaces = groups.some((g) => g.restaurant);
   return (
     <div class="page">
       <Header title="My foods" back="/food" right={<button class="btn sm primary" onClick={() => setEditing('new')}>New</button>} />
-      <input class="search" type="search" placeholder="Search" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
-      {!foods.length && <p class="empty">Add each food you eat regularly once: its calories and protein per 100 g or per serving. Estimates are fine.</p>}
-      {list.map((f) => (
-        <button key={f.id} class="list-item" onClick={() => setEditing(f)}>
-          <span class="grow left">
-            <span class="block bold">{f.name}</span>
-            <span class="block muted small">{r0(f.kcal)} kcal · {r1(f.protein_g)} g protein per {f.basis === 'per_100g' ? '100 g' : f.serving_label || 'serving'}</span>
-          </span>
-          <span class="muted">›</span>
-        </button>
+      <input class="search" type="search" placeholder="Search foods or restaurants" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
+      {!foods.length && <p class="empty">Add each food you eat regularly once: its calories and protein per 100 g or per serving. Estimates are fine. Add a restaurant to group foods by where they're from.</p>}
+      {groups.map((g) => (
+        <section key={g.restaurant ?? '—'}>
+          {hasPlaces && <h3 class="section-title">{g.restaurant ?? 'Other'} · {g.foods.length}</h3>}
+          {g.foods.map((f) => (
+            <button key={f.id} class="list-item" onClick={() => setEditing(f)}>
+              <span class="grow left">
+                <span class="block bold">{f.name}</span>
+                <span class="block muted small">{r0(f.kcal)} kcal · {r1(f.protein_g)} g protein per {f.basis === 'per_100g' ? '100 g' : f.serving_label || 'serving'}</span>
+              </span>
+              <span class="muted">›</span>
+            </button>
+          ))}
+        </section>
       ))}
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? 'New food' : 'Edit food'}>
         {editing && <FoodForm existing={editing === 'new' ? undefined : editing} onSaved={() => setEditing(null)} onCancel={() => setEditing(null)} />}
@@ -362,9 +448,12 @@ export function FoodsScreen() {
   );
 }
 
-export function FoodForm(props: { existing?: Food; initialName?: string; onSaved: (f: Food) => void; onCancel: () => void }) {
+export function FoodForm(props: { existing?: Food; initialName?: string; initialRestaurant?: string | null; onSaved: (f: Food) => void; onCancel: () => void }) {
   const e = props.existing;
+  const all = useFoods() ?? [];
+  const places = restaurants(all);
   const [name, setName] = useState(e?.name ?? props.initialName ?? '');
+  const [restaurant, setRestaurant] = useState(e?.restaurant ?? props.initialRestaurant ?? '');
   const [basis, setBasis] = useState<Food['basis']>(e?.basis ?? 'per_100g');
   const [servingG, setServingG] = useState<number | null>(e?.serving_g ?? null);
   const [servingLabel, setServingLabel] = useState(e?.serving_label ?? '');
@@ -377,8 +466,11 @@ export function FoodForm(props: { existing?: Food; initialName?: string; onSaved
   const save = async () => {
     if (!name.trim()) { toast('Give it a name'); return; }
     if (kcal == null) { toast('Enter the calories'); return; }
+    // Reuse the existing spelling of a restaurant ("mcdonald's" → "McDonald's").
+    const typed = restaurant.trim();
+    const place = typed ? places.find((p) => p.toLowerCase() === typed.toLowerCase()) ?? typed : null;
     const [f] = await put('foods', {
-      ...(e ?? {}), name: name.trim(), basis, serving_g: servingG || null, serving_label: servingLabel.trim(),
+      ...(e ?? {}), name: name.trim(), restaurant: place, basis, serving_g: servingG || null, serving_label: servingLabel.trim(),
       kcal, protein_g: protein ?? 0, carbs_g: carbs, fat_g: fat,
     } as Food);
     props.onSaved(f);
@@ -387,7 +479,17 @@ export function FoodForm(props: { existing?: Food; initialName?: string; onSaved
   return (
     <div class="form">
       <label>Name</label>
-      <input class="input" value={name} placeholder="e.g. Cooked rice" onInput={(ev) => setName((ev.currentTarget as HTMLInputElement).value)} />
+      <input class="input" value={name} placeholder="e.g. Chicken burrito bowl" onInput={(ev) => setName((ev.currentTarget as HTMLInputElement).value)} />
+      <label>Restaurant (optional)</label>
+      <input class="input" value={restaurant} placeholder="e.g. Chipotle" onInput={(ev) => setRestaurant((ev.currentTarget as HTMLInputElement).value)} />
+      {places.length > 0 && (
+        <div class="chips wrap">
+          {places.map((p) => (
+            <button key={p} type="button" class={`chip place ${restaurant.trim().toLowerCase() === p.toLowerCase() ? 'on' : ''}`}
+              onClick={() => setRestaurant(restaurant.trim().toLowerCase() === p.toLowerCase() ? '' : p)}>{p}</button>
+          ))}
+        </div>
+      )}
       <label>Nutrition is</label>
       <Segmented label="Nutrition basis" value={basis === 'per_100g' ? 'Per 100 g' : 'Per serving'} options={['Per 100 g', 'Per serving']}
         onChange={(v) => setBasis(v === 'Per 100 g' ? 'per_100g' : 'per_serving')} />
@@ -415,4 +517,3 @@ export function FoodForm(props: { existing?: Food; initialName?: string; onSaved
     </div>
   );
 }
-

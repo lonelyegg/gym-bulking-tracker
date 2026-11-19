@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { canUseGrams, canUseServings, dayTotals, defaultAmount, mealNameFor, nutrientsFor, proteinTarget, rankFoods } from '../src/lib/nutrition';
+import {
+  canUseGrams, canUseServings, dayTotals, defaultAmount, fromRestaurant, groupByRestaurant, matchesSearch, mealNameFor, nutrientsFor,
+  proteinTarget, rankFoods, restaurants,
+} from '../src/lib/nutrition';
 import { bulkCheck, changeIsGood, DEFAULT_SITES, measurementTable, movingAverage, siteId, weekAverage } from '../src/lib/body';
 import { addDays } from '../src/lib/stats';
 
@@ -49,6 +52,28 @@ describe('nutrition', () => {
     expect(defaultAmount(whey)).toEqual({ amount: 1, unit: 'serving' });
     expect(proteinTarget(70, 1.8)).toBe(126);
     expect(proteinTarget(null, 1.8)).toBeNull();
+  });
+});
+
+describe('restaurants', () => {
+  const foods = [
+    { name: 'Big Mac', restaurant: "McDonald's" }, { name: 'Fries', restaurant: "mcdonald's " },
+    { name: 'Burrito bowl', restaurant: 'Chipotle' }, { name: 'Rice', restaurant: null }, { name: 'Oats', restaurant: '' },
+  ];
+  it('lists restaurants A–Z, case-insensitive, first spelling wins', () => {
+    expect(restaurants(foods)).toEqual(['Chipotle', "McDonald's"]);
+  });
+  it('groups foods by restaurant with the rest under Other, last', () => {
+    const g = groupByRestaurant(foods);
+    expect(g.map((x) => [x.restaurant, x.foods.map((f) => f.name)])).toEqual([
+      ['Chipotle', ['Burrito bowl']], ["McDonald's", ['Big Mac', 'Fries']], [null, ['Oats', 'Rice']],
+    ]);
+  });
+  it('filter and search include the restaurant', () => {
+    expect(foods.filter((f) => fromRestaurant(f, "MCDONALD'S")).length).toBe(2);
+    expect(foods.filter((f) => fromRestaurant(f, null)).length).toBe(5);
+    expect(foods.filter((f) => matchesSearch(f, 'chipot')).map((f) => f.name)).toEqual(['Burrito bowl']);
+    expect(foods.filter((f) => matchesSearch(f, 'fri')).map((f) => f.name)).toEqual(['Fries']);
   });
 });
 

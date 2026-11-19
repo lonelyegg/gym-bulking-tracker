@@ -140,12 +140,26 @@ export interface Food extends Base {
   protein_g: number;
   carbs_g: number | null;
   fat_g: number | null;
+  /** Optional: where it's from (e.g. a restaurant), for grouping. */
+  restaurant?: string | null;
+}
+
+/** One item of a saved meal: a food from My foods, or a one-time entry with its own numbers. */
+export interface SavedMealItem {
+  food_id: string | null;
+  amount: number;
+  unit: 'g' | 'serving';
+  name?: string;
+  kcal?: number;
+  protein_g?: number;
+  carbs_g?: number | null;
+  fat_g?: number | null;
 }
 
 /** A reusable meal ("usual breakfast"). */
 export interface SavedMeal extends Base {
   name: string;
-  items: { food_id: string; amount: number; unit: 'g' | 'serving' }[];
+  items: SavedMealItem[];
 }
 
 /** An actual eating occasion with start and finish times. */
@@ -160,7 +174,10 @@ export interface Meal extends Base {
 export interface FoodLog extends Base {
   date: string;
   meal_id: string | null;
-  food_id: string;
+  /** null for a one-time entry that isn't saved in My foods. */
+  food_id: string | null;
+  /** Name at log time (shown if the food is deleted, and for one-time entries). */
+  name?: string;
   amount: number;
   unit: 'g' | 'serving';
   // Copied from the food at log time so later edits don't rewrite history.

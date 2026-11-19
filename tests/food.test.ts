@@ -6,7 +6,7 @@ import { localDate } from '../src/lib/logic';
 import { addDays } from '../src/lib/stats';
 import { dayTotals } from '../src/lib/nutrition';
 import {
-  copyDay, finishMeal, logFood, logSavedMeal, mealsOn, saveMealAsTemplate, startMeal, updateLog,
+  copyDay, finishMeal, logFood, logSavedMeal, mealsOn, quickAdd, saveMealAsTemplate, startMeal, updateLog, updateQuick,
 } from '../src/state/food';
 import { currentWeight, logMeasurements, logWeight } from '../src/state/body';
 
@@ -90,6 +90,37 @@ describe('food logging', () => {
 
   it('rejects amounts that do not fit the food', async () => {
     await expect(logFood(rice, 1, 'serving', { date: today })).rejects.toThrow();
+  });
+});
+
+describe('one-time entries', () => {
+  it('quick add logs numbers without creating a food; it joins the open meal and can be edited', async () => {
+    const l1 = await logFood(rice, 100, 'g', { date: today });
+    const q = await quickAdd({ name: 'Birthday cake', kcal: 450, protein_g: 5, carbs_g: 60, fat_g: 20 }, { date: today });
+    expect(q.food_id).toBeNull();
+    expect(q.meal_id).toBe(l1.meal_id);
+    expect(await db.foods.count()).toBe(2); // rice + whey only
+    await updateQuick(q, { name: 'Cake', kcal: 400, protein_g: 4, carbs_g: null, fat_g: null });
+    expect(await db.food_logs.get(q.id)).toMatchObject({ name: 'Cake', kcal: 400, carbs_g: null });
+    expect(dayTotals(await logsOn(today)).kcal).toBe(530);
+  });
+  it('a nameless quick add is called "Quick add"; one-time items survive saved meals and copy', async () => {
+    const q = await quickAdd({ name: '  ', kcal: 300, protein_g: 10, carbs_g: null, fat_g: null }, { date: today });
+    expect(q.name).toBe('Quick add');
+    await logFood(whey, 1, 'serving', { date: today, mealId: q.meal_id! });
+    const saved = await saveMealAsTemplate((await db.meals.get(q.meal_id!))!, 'Mixed');
+    expect(saved.items[0]).toMatchObject({ food_id: null, name: 'Quick add', kcal: 300, protein_g: 10 });
+    const d = addDays(today, 2);
+    await logSavedMeal(saved, d);
+    expect(dayTotals(await logsOn(d)).kcal).toBe(420);
+    await copyDay(d, addDays(d, 1));
+    const copied = await logsOn(addDays(d, 1));
+    expect(copied.map((l) => l.name).sort()).toEqual(['Quick add', 'Whey']);
+  });
+  it('logs remember the food name even after the food is deleted', async () => {
+    const l = await logFood(rice, 100, 'g', { date: today });
+    await softDelete('foods', [rice.id]);
+    expect((await db.food_logs.get(l.id))!.name).toBe('Rice');
   });
 });
 

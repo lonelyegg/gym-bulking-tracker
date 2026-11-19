@@ -471,3 +471,7 @@ main.in-workout { padding-bottom: calc(40px + var(--safe-bottom)); }
 .bulk-advice { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
 .tap-wrap { cursor: pointer; }
 .tab-label { font-size: 10.5px; }
+.place-chips { margin: 0 -16px 6px; padding: 0 16px 6px; }
+.place-chips .chip, .chip.place { text-transform: none; }
+.add-modes { margin: 4px 0 6px; }
+.add-modes .btn { margin-top: 0; }

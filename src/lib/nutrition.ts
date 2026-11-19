@@ -58,11 +58,11 @@ export function rankFoods<F extends Pick<Food, 'id' | 'name'>>(
   const recentIds: string[] = [];
   for (const l of live) {
     if (recentIds.length >= recentCount) break;
-    if (byId.has(l.food_id) && !recentIds.includes(l.food_id)) recentIds.push(l.food_id);
+    if (l.food_id && byId.has(l.food_id) && !recentIds.includes(l.food_id)) recentIds.push(l.food_id);
   }
   const since = new Date(now.getTime() - 30 * 86400000).toISOString();
   const freq = new Map<string, number>();
-  for (const l of live) if (l.created_at >= since) freq.set(l.food_id, (freq.get(l.food_id) ?? 0) + 1);
+  for (const l of live) if (l.food_id && l.created_at >= since) freq.set(l.food_id, (freq.get(l.food_id) ?? 0) + 1);
   const others = foods.filter((f) => !recentIds.includes(f.id))
     .sort((a, b) => (freq.get(b.id) ?? 0) - (freq.get(a.id) ?? 0) || a.name.localeCompare(b.name));
   return { recent: recentIds.map((id) => byId.get(id)!), others };
@@ -76,3 +76,33 @@ export function defaultAmount(f: Pick<Food, 'basis' | 'serving_g'>, last?: Pick<
 }
 
 export const proteinTarget = (weightKg: number | null, gPerKg: number) => (weightKg ? Math.round(weightKg * gPerKg) : null);
+
+// ---------- Restaurants ----------
+
+const key = (r: string | null | undefined) => (r ?? '').trim().toLowerCase();
+
+/** Restaurants you've used, A–Z (spelling of the first food entered wins; case doesn't matter). */
+export function restaurants(foods: Pick<Food, 'restaurant'>[]): string[] {
+  const seen = new Map<string, string>();
+  for (const f of foods) {
+    const k = key(f.restaurant);
+    if (k && !seen.has(k)) seen.set(k, f.restaurant!.trim());
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+export const fromRestaurant = (f: Pick<Food, 'restaurant'>, r: string | null) => (r == null ? true : key(f.restaurant) === key(r));
+
+/** Foods grouped by restaurant (A–Z), with foods that have none last under "Other". */
+export function groupByRestaurant<F extends Pick<Food, 'restaurant' | 'name'>>(foods: F[]): { restaurant: string | null; foods: F[] }[] {
+  const groups = restaurants(foods).map((r) => ({ restaurant: r as string | null, foods: foods.filter((f) => key(f.restaurant) === key(r)) }));
+  const rest = foods.filter((f) => !key(f.restaurant));
+  if (rest.length) groups.push({ restaurant: null, foods: rest });
+  return groups.map((g) => ({ ...g, foods: [...g.foods].sort((a, b) => a.name.localeCompare(b.name)) }));
+}
+
+/** Search matches the food or its restaurant. */
+export const matchesSearch = (f: Pick<Food, 'name' | 'restaurant'>, q: string) => {
+  const t = q.trim().toLowerCase();
+  return !t || f.name.toLowerCase().includes(t) || key(f.restaurant).includes(t);
+};

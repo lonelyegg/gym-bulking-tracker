@@ -48,6 +48,8 @@ Home, top to bottom:
 ### Food
 - **Targets.** Two bars, calories and protein, on the Food tab and inside Home's Today card. Protein target = 1.8 g × your current bodyweight (editable). Set them under **Targets** on the Food tab, or in Settings.
 - **My foods.** Enter each food you eat regularly once: calories and protein (carbs and fat optional), per 100 g or per serving, with an optional serving size (e.g. "1 scoop = 30 g") so you can log by grams or servings.
+- **Restaurants (optional).** Give a food a restaurant and My foods groups it under that restaurant. **Add food** shows a chip per restaurant to filter, and search matches restaurant names too. Spelling and capitals don't matter ("chipotle" joins "Chipotle").
+- **Quick add** for one-time food: a name (optional) plus its calories and protein, logged without saving it to My foods. Turn on "Also save to My foods" if you might have it again. One-time entries can be edited, saved inside saved meals, and copied like anything else.
 - **Logging.** **Add food** shows your **recent** foods first, then the rest by how often you eat them. Pick one; the amount is pre-filled with what you had last time; tap **Add**. Food goes into the meal you're eating now (or starts a new one, named by time of day).
 - **Meals have start and finish times.** A new meal shows "Eating since 12:30" with a **Finish meal** button. Tap a meal's **Edit** to change its times, rename it, save it, or delete it.
 - **One-tap meals.** Save any meal (**Edit → Save as a saved meal**). It becomes a ⚡ button at the top of the Food tab: one tap logs it, and a second tap finishes it. **Copy yesterday** copies yesterday's meals at the same times.

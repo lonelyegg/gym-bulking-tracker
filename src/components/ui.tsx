@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 // ---------- Router (hash based: works on GitHub Pages without rewrites) ----------
 
@@ -93,7 +93,8 @@ export function Stepper(props: {
   const [text, setText] = useState(value == null ? '' : String(value));
   // Sync the text when the value changes from outside (e.g. +/− or a reset), not on mount.
   const lastValue = useRef(value);
-  useEffect(() => {
+  // Layout effect: runs right after the render, so it can never overwrite something you're typing.
+  useLayoutEffect(() => {
     if (lastValue.current === value) return;
     lastValue.current = value;
     setText(value == null ? '' : String(value));

@@ -13,6 +13,7 @@ import {
   updateSet, type PreviousSession,
 } from '../state/workout';
 import { TimerPanel } from '../components/timer';
+import { IconCheck } from '../components/icons';
 import { liftOfExercise, plateText, replay, WORK_REPS, type ProgramConfig } from '../lib/program';
 import { programConfig } from '../state/program';
 import { useTraining } from '../state/training';
@@ -290,7 +291,7 @@ function ExerciseCard(props: {
 
       {program && (
         <div class="hint program-hint">
-          <span>{program.hint}{program.plates && <span class="block plates">🏋️ {program.plates}</span>}</span>
+          <span>{program.hint}{program.plates && <span class="block plates">Plates: {program.plates}</span>}</span>
         </div>
       )}
       {hint && (
@@ -326,7 +327,7 @@ function ExerciseCard(props: {
               </button>
             )}
             <button class={`check ${done ? 'on' : ''}`} aria-label={done ? 'Mark not done' : 'Complete set'} onClick={() => tapComplete(s)}>
-              ✓
+              <IconCheck size={20} />
             </button>
             {s.pr_types?.length > 0 && <span class="pr-badge">PR</span>}
           </div>
@@ -429,9 +430,9 @@ function SetEditor(props: {
     <Sheet open onClose={props.onClose} title={`${exercise?.name ?? ''} · ${warm ? 'warm-up' : `set ${set.set_number}`}`}>
       <div class="form">
         <label>Weight {exercise?.equipment === 'bodyweight' && <span class="muted">(added kg, 0 = bodyweight)</span>}</label>
-        <Stepper value={weight} decimals unit="kg" onChange={setWeight} onInc={incW} onDec={decW} placeholder="0" />
+        <Stepper size="lg" value={weight} decimals unit="kg" onChange={setWeight} onInc={incW} onDec={decW} placeholder="0" />
         <label>Reps</label>
-        <Stepper value={reps} min={0} max={200} onChange={setReps} placeholder="0" />
+        <Stepper size="lg" value={reps} min={0} max={200} onChange={setReps} placeholder="0" />
         {!warm && !props.noRir && (<>
           <label>Reps in reserve</label>
           <RirPicker value={rir} onChange={setRir} target={props.targetRir} />
@@ -443,7 +444,7 @@ function SetEditor(props: {
             ? <button class="btn grow primary" onClick={() => save(false)}>Save</button>
             : (<>
               <button class="btn grow" onClick={() => save(false)}>Save</button>
-              <button class="btn grow primary" onClick={() => save(true)}>Complete ✓</button>
+              <button class="btn grow primary" onClick={() => save(true)}><IconCheck size={18} /> Complete</button>
             </>)}
         </div>
       </div>

@@ -17,7 +17,7 @@ import { useTraining, type TrainingData } from '../state/training';
 import { computeNextUp, getActiveWorkout, startWorkout } from '../state/workout';
 import { MonthCalendar } from '../components/Calendar';
 import { ColumnChart, LineChart } from '../components/charts';
-import { IconGear, IconScale } from '../components/icons';
+import { IconGear, IconMoon, IconScale } from '../components/icons';
 import { IconDumbbell, IconFlame, IconPlay, IconTimer, IconTrend, IconTrophy } from '../components/icons';
 import { fmtDay, PrRow } from '../components/PrRow';
 import { go, PageTitle, Section, Segmented } from '../components/ui';
@@ -151,7 +151,7 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
       </div>
       {d ? (
         <div class="today-main">
-          <div class="today-icon">{isRest ? '😴' : d.icon}</div>
+          <div class="today-icon">{isRest ? <IconMoon size={28} /> : d.icon}</div>
           <div class="grow">
             <div class="today-name">{isRest ? `Next: ${d.name}` : d.name}</div>
             {isRest && when && <div class="muted small">{when.slice(3)}</div>}

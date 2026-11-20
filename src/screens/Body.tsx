@@ -56,7 +56,7 @@ export function WeighInCard({ body, compact }: { body: BodyData; compact?: boole
   return (
     <div class={compact ? 'weighin compact' : 'card weighin'}>
       <div class="muted small">{todays ? 'Edit today’s weigh-in' : 'Log today’s weight'}{!compact && ' (same time each morning is most consistent)'}</div>
-      <Stepper value={kg} step={0.1} min={20} max={300} decimals unit="kg" placeholder="kg" onChange={setKg} />
+      <Stepper size={compact ? 'md' : 'lg'} value={kg} step={0.1} min={20} max={300} decimals unit="kg" placeholder="kg" onChange={setKg} />
       {!compact && (<>
         <div class="muted small">Sleep last night (optional)</div>
         <Stepper value={sleep} step={0.5} min={0} max={16} decimals unit="h" placeholder="–" onChange={setSleep} />

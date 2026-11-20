@@ -6,7 +6,7 @@ import { prEvents, workoutsByDate } from '../lib/stats';
 import { useTraining } from '../state/training';
 import { deleteWorkout, summarize } from '../state/workout';
 import { MonthCalendar, monthLabel } from '../components/Calendar';
-import { IconChevron } from '../components/icons';
+import { IconChevron, IconEdit, IconTrophy } from '../components/icons';
 import { fmtDay, PrRow } from '../components/PrRow';
 import { usePlan } from '../components/usePlan';
 import { DAY_LIFTS, LIFT_NAME, replay, type Day } from '../lib/program';
@@ -72,7 +72,7 @@ export function HistoryScreen() {
                 {st?.volume ? ` · ${Math.round(st.volume).toLocaleString()} kg` : ''}
               </span>
             </span>
-            {prs > 0 && <span class="pr-pill">🏆 {prs}</span>}
+            {prs > 0 && <span class="pr-pill"><IconTrophy size={14} /> {prs}</span>}
             <IconChevron class="muted" />
           </button>
         );
@@ -134,7 +134,7 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
 
       {s.prs.length > 0 && (
         <section class="card pr-card">
-          <div class="bold">🏆 {s.prs.length} personal record{s.prs.length > 1 ? 's' : ''}</div>
+          <div class="bold row gap-sm"><IconTrophy size={18} class="gold" /> {s.prs.length} personal record{s.prs.length > 1 ? 's' : ''}</div>
           {s.prs.map(({ exercise, set }) => (
             <div key={set.id} class="small">
               {exercise}: {fmtKg(set.weight_kg)} kg × {set.reps} · <span class="muted">{set.pr_types.map((p) => PR_LABEL[p]).join(', ')}</span>
@@ -149,7 +149,7 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
             <button class="ex-link" onClick={() => p.exercise && go(`/exercise/${p.exercise.id}`)}>{p.exercise?.name} <span class="chev">›</span></button>
             {p.avgRest != null && <span class="muted small">avg rest {fmtClock(p.avgRest)}</span>}
           </div>
-          {p.we.note && <div class="muted small">📝 {p.we.note}</div>}
+          {p.we.note && <div class="muted small row gap-sm"><IconEdit size={13} /> {p.we.note}</div>}
           {p.sets.length === 0 && <div class="muted small">No sets logged{p.we.skipped ? ' (skipped)' : ''}</div>}
           {p.sets.map((set) => (
             <div key={set.id} class="summary-set">

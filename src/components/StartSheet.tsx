@@ -6,6 +6,7 @@ import { localDate } from '../lib/logic';
 import { settings } from '../state/settings';
 import { computeNextUp, getActiveWorkout, startWorkout } from '../state/workout';
 import { go, Sheet } from './ui';
+import { IconPlus } from './icons';
 import { DAY_STYLE, LIFT_SHORT, sessionPlan, type Day } from '../lib/program';
 import { fmtKg } from '../lib/logic';
 import { programActive, startProgramWorkout, useProgram } from '../state/program';
@@ -82,7 +83,7 @@ export function StartSheet(props: { open: boolean; onClose: () => void; date?: s
               </button>
             ))}
             <button onClick={() => pick(null)}>
-              <span class="day-dot">＋</span><span class="grow">Empty workout</span>
+              <span class="day-dot"><IconPlus size={17} /></span><span class="grow">Empty workout</span>
             </button>
           </div>
         </>

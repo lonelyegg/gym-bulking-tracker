@@ -7,6 +7,7 @@ import {
 } from '../state/device';
 import { Header, Stepper, Toggle, toast } from '../components/ui';
 import { TargetsForm } from '../components/nutrition';
+import { IconBell } from '../components/icons';
 import { BackupSection, SyncSection } from './SyncSettings';
 
 export function SettingsScreen() {
@@ -65,7 +66,7 @@ export function SettingsScreen() {
           {audioSessionSupported() ? ' ' : ' (Audio session control isn’t available in this browser.) '}
           With the ring/silent switch on silent, iPhone may mute the beep.
         </p>
-        <button class="btn block" onClick={testBeep}>🔔 Test beep</button>
+        <button class="btn block" onClick={testBeep}><IconBell /> Test beep</button>
 
         <Toggle label="Keep screen on during workouts" hint={wakeLockSupported() ? 'Recommended: on iPhone the timer can only beep while the screen is on and the app is open.' : 'Not supported here.'}
           checked={s.wake_lock} onChange={(v) => saveSetting('wake_lock', v)} />

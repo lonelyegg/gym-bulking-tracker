@@ -6,6 +6,7 @@ import {
 } from '../db/schema';
 import { primaryMuscle, REGIONS, regionOf, resolveMuscles, summaryLine, type MuscleMap } from '../lib/muscles';
 import { MuscleEditor } from '../components/MuscleEditor';
+import { IconClose, IconDown, IconMoon, IconUp } from '../components/icons';
 import { fmtClock, fmtRir, scheduleMode, WEEKDAYS } from '../lib/logic';
 import { saveSetting, settings } from '../state/settings';
 import { ExercisePicker } from '../components/ExercisePicker';
@@ -60,7 +61,7 @@ export function PlanScreen() {
             <span class="block bold">{s.name} {s.id === activeId && <span class="tag">Active</span>}</span>
             <span class="rotation-mini">
               {s.rotation.map((id, i) => id === REST
-                ? <span key={i} class="rot-chip rest">😴</span>
+                ? <span key={i} class="rot-chip rest"><IconMoon size={13} /></span>
                 : <span key={i} class="rot-chip" style={{ background: dt(id)?.color }}>{dt(id)?.icon}</span>)}
             </span>
           </span>
@@ -123,7 +124,7 @@ export function SplitEditorScreen({ id }: { id: string }) {
   const label = (entry: string) => {
     const d = dayTypes.find((x) => x.id === entry);
     return entry === REST
-      ? <><span class="day-dot rest">😴</span><span class="grow">Rest day</span></>
+      ? <><span class="day-dot rest"><IconMoon size={17} /></span><span class="grow muted">Rest day</span></>
       : <><span class="day-dot" style={{ background: d?.color }}>{d?.icon}</span><span class="grow">{d?.name ?? 'Deleted day'}</span></>;
   };
   const pick = (entry: string) => {
@@ -167,9 +168,9 @@ export function SplitEditorScreen({ id }: { id: string }) {
           <div key={i} class="list-item static">
             <span class="muted small w-20">{i + 1}</span>
             {label(entry)}
-            <button class="icon-btn sm" aria-label="Move up" onClick={() => move(i, -1)}>↑</button>
-            <button class="icon-btn sm" aria-label="Move down" onClick={() => move(i, 1)}>↓</button>
-            <button class="icon-btn sm" aria-label="Remove" onClick={() => setRot(split.rotation.filter((_, k) => k !== i))}>✕</button>
+            <button class="icon-btn sm" aria-label="Move up" onClick={() => move(i, -1)}><IconUp /></button>
+            <button class="icon-btn sm" aria-label="Move down" onClick={() => move(i, 1)}><IconDown /></button>
+            <button class="icon-btn sm" aria-label="Remove" onClick={() => setRot(split.rotation.filter((_, k) => k !== i))}><IconClose size={16} /></button>
           </div>
         ))}
         <button class="btn ghost block" onClick={() => setAdding(true)}>+ Add day</button>
@@ -185,7 +186,7 @@ export function SplitEditorScreen({ id }: { id: string }) {
       <Sheet open={adding || slot != null} onClose={() => { setAdding(false); setSlot(null); }}
         title={slot != null ? `${WEEKDAYS[slot]}day`.replace('Tueday', 'Tuesday').replace('Wedday', 'Wednesday').replace('Thuday', 'Thursday').replace('Satday', 'Saturday') : 'Add to rotation'}>
         <div class="menu-list">
-          <button onClick={() => pick(REST)}>😴 Rest day</button>
+          <button onClick={() => pick(REST)}><span class="day-dot rest"><IconMoon size={17} /></span> Rest day</button>
           {dayTypes.map((d) => (
             <button key={d.id} onClick={() => pick(d.id)}>
               <span class="day-dot" style={{ background: d.color }}>{d.icon}</span> {d.name}
@@ -258,8 +259,8 @@ export function DayTypeEditorScreen({ id }: { id: string }) {
             <span class="block bold">{exName(t.exercise_id)}</span>
             <span class="block muted small">{t.target_sets} × {t.rep_min}–{t.rep_max} @ RIR {fmtRir(t.target_rir)} · rest {fmtClock(t.rest_s)}</span>
           </button>
-          <button class="icon-btn sm" aria-label="Move up" onClick={() => move(i, -1)}>↑</button>
-          <button class="icon-btn sm" aria-label="Move down" onClick={() => move(i, 1)}>↓</button>
+          <button class="icon-btn sm" aria-label="Move up" onClick={() => move(i, -1)}><IconUp /></button>
+          <button class="icon-btn sm" aria-label="Move down" onClick={() => move(i, 1)}><IconDown /></button>
         </div>
       ))}
       <button class="btn ghost block" onClick={() => setPicking(true)}>+ Add exercise</button>

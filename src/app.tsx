@@ -55,7 +55,7 @@ export function App() {
   const inWorkout = tab === 'workout' || tab === 'capture';
   return (
     <>
-      <main class={inWorkout ? 'in-workout' : ''}>{el}</main>
+      <main class={inWorkout ? 'in-workout' : ''}><div class="page-enter" key={route.value.split('?')[0]}>{el}</div></main>
       {!inWorkout && (
         <div class="bottom-dock">
           {active && <MiniBar name={active.name} icon={active.icon} color={active.color} />}

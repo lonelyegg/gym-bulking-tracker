@@ -6,6 +6,7 @@ import {
   connect, disconnect, isConfigured, queueAll, redownloadAll, saveSyncConfig, syncConfig, syncNow, syncStatus,
 } from '../sync/sync';
 import { confirmSheet, go, Toggle, toast } from '../components/ui';
+import { IconCloud, IconInfo } from '../components/icons';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -26,13 +27,13 @@ export function SyncChip() {
   const st = syncStatus.value;
   let label: string;
   let tone = 'muted';
-  if (!isConfigured()) { label = '☁️ Not backed up'; tone = 'warn'; }
-  else if (st.state === 'error') { label = '⚠️ Sync problem'; tone = 'bad'; }
-  else if (st.state === 'syncing') label = '☁️ Syncing…';
-  else if (st.state === 'offline') { label = `☁️ Offline${pending ? ` · ${pending}` : ''}`; tone = 'warn'; }
-  else if (pending > 0) label = `☁️ ${pending} waiting`;
-  else { label = '☁️ Synced'; tone = 'ok'; }
-  return <button class={`sync-chip ${tone}`} onClick={() => go('/settings')}>{label}</button>;
+  if (!isConfigured()) { label = 'Not backed up'; tone = 'warn'; }
+  else if (st.state === 'error') { label = 'Sync problem'; tone = 'bad'; }
+  else if (st.state === 'syncing') label = 'Syncing…';
+  else if (st.state === 'offline') { label = `Offline${pending ? ` · ${pending}` : ''}`; tone = 'warn'; }
+  else if (pending > 0) label = `${pending} waiting`;
+  else { label = 'Synced'; tone = 'ok'; }
+  return <button class={`sync-chip ${tone}`} onClick={() => go('/settings')}>{tone === 'bad' ? <IconInfo size={14} /> : <IconCloud size={14} />}{label}</button>;
 }
 
 export function SyncSection() {

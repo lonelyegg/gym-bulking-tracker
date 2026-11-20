@@ -11,6 +11,7 @@ import { activateProgram, programActive, saveProgram, setLiftWeight, startProgra
 import { getActiveWorkout } from '../state/workout';
 import { db, useLive } from '../db/db';
 import { confirmSheet, go, Header, Sheet, Stepper, Toggle, toast } from '../components/ui';
+import { IconEdit } from '../components/icons';
 
 const dayLabel = (date: string) => {
   const today = localDate();
@@ -106,7 +107,7 @@ export function ProgramScreen() {
                 <span class={`block small ${s.tone}-text`}>{s.text}</span>
               </button>
               <button class="lift-weight" onClick={() => setEditLift(lift)} aria-label={`Change ${LIFT_NAME[lift]} weight`}>
-                <span class="bold num">{fmtKg(st.weight)}</span><span class="muted small"> kg ✎</span>
+                <span class="bold num">{fmtKg(st.weight)}</span><span class="muted small"> kg</span> <IconEdit size={13} class="muted" />
               </button>
             </div>
           );

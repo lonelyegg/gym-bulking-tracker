@@ -12,6 +12,7 @@ import {
 import { photoNote } from '../sync/photos';
 import { isConfigured } from '../sync/sync';
 import { confirmSheet, go, Header, Segmented, Sheet, toast } from '../components/ui';
+import { IconCamera, IconClose } from '../components/icons';
 
 const fmtDate = (d: string, withYear = false) =>
   new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}) });
@@ -268,7 +269,7 @@ function Camera(props: { pose: Pose; facing: Facing; delay: number; ghost: Photo
       <div class="cam-row">
         <button class="btn sm" onClick={() => fileInput.current?.click()}>From library</button>
         {state === 'live'
-          ? <button class="shutter" aria-label={count != null ? 'Cancel timer' : 'Take photo'} onClick={shutter}>{count != null ? '✕' : ''}</button>
+          ? <button class="shutter" aria-label={count != null ? 'Cancel timer' : 'Take photo'} onClick={shutter}>{count != null ? <IconClose size={26} /> : ''}</button>
           : <button class="btn primary" onClick={() => fileInput.current?.click()}>Take photo</button>}
         <span />
       </div>
@@ -289,7 +290,7 @@ export function PhotoCompareCard({ title = true }: { title?: boolean }) {
   const last = dates[dates.length - 1];
   return (
     <section class="card dash-card tap" onClick={() => go('/photos')}>
-      {title && <div class="section-head"><span class="section-head-title" style={{ color: '#f5a3c7' }}>📸 Progress photos</span><span class="section-head-more">{dates.length ? 'Compare' : ''}<span class="chev">›</span></span></div>}
+      {title && <div class="section-head"><span class="section-head-title" style={{ color: 'var(--c-photo)' }}><IconCamera size={16} />Progress photos</span><span class="section-head-more">{dates.length ? 'Compare' : ''}<span class="chev">›</span></span></div>}
       {!dates.length ? (
         <>
           <p class="empty-note">Photos show changes the scale and tape miss. Take a front, side and back set now, then every 4 weeks.</p>

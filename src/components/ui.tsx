@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { IconCheck, IconChevron, IconClose, IconTrophy } from './icons';
 
 // ---------- Router (hash based: works on GitHub Pages without rewrites) ----------
 
@@ -29,25 +30,68 @@ export function toast(text: string, kind: Toast['kind'] = 'info', ms = 3000) {
 export function Toasts() {
   return (
     <div class="toasts">
-      {toasts.value.map((t) => <div key={t.id} class={`toast ${t.kind}`}>{t.text}</div>)}
+      {toasts.value.map((t) => {
+        const done = t.text.endsWith(' ✓');
+        const pr = t.text.startsWith('🏆');
+        const text = t.text.replace(/ ✓$/, '').replace(/^🏆\s*/, '');
+        return (
+          <div key={t.id} class={`toast ${t.kind}`} role="status">
+            {pr ? <IconTrophy size={18} /> : done ? <IconCheck size={18} class="toast-ok" /> : null}
+            <span>{text}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 // ---------- Bottom sheet ----------
 
-export function Sheet(props: { open: boolean; onClose: () => void; title?: string; children: ComponentChildren }) {
+export function Sheet(props: { open: boolean; onClose: () => void; title?: ComponentChildren; children: ComponentChildren }) {
+  const [closing, setClosing] = useState(false);
+  const sheet = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ y: number; dy: number } | null>(null);
   useEffect(() => {
     if (!props.open) return;
+    setClosing(false);
     document.body.classList.add('noscroll');
     return () => document.body.classList.remove('noscroll');
   }, [props.open]);
   if (!props.open) return null;
+  /** Slide down, then tell the parent. */
+  const close = () => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(() => props.onClose(), 180);
+  };
+  // Drag the grip or title bar down to dismiss.
+  const onStart = (e: TouchEvent) => { drag.current = { y: e.touches[0].clientY, dy: 0 }; };
+  const onMove = (e: TouchEvent) => {
+    const d = drag.current;
+    if (!d || !sheet.current) return;
+    d.dy = Math.max(0, e.touches[0].clientY - d.y);
+    sheet.current.style.transform = `translateY(${d.dy}px)`;
+    sheet.current.style.transition = 'none';
+  };
+  const onEnd = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!sheet.current || !d) return;
+    sheet.current.style.transition = 'transform .2s ease';
+    if (d.dy > 90) { sheet.current.style.transform = 'translateY(100%)'; setTimeout(() => props.onClose(), 180); } else sheet.current.style.transform = '';
+  };
   return (
-    <div class="sheet-backdrop" onClick={props.onClose}>
-      <div class="sheet" onClick={(e) => e.stopPropagation()} role="dialog">
-        <div class="sheet-grip" />
-        {props.title && <div class="sheet-title">{props.title}</div>}
+    <div class={`sheet-backdrop ${closing ? 'closing' : ''}`} onClick={close}>
+      <div class="sheet" ref={sheet} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}>
+          <div class="sheet-grip" />
+          {props.title != null && (
+            <div class="sheet-head">
+              <div class="sheet-title">{props.title}</div>
+              <button class="sheet-close" aria-label="Close" onClick={close}><IconClose size={16} /></button>
+            </div>
+          )}
+        </div>
         {props.children}
       </div>
     </div>
@@ -88,6 +132,8 @@ export function Stepper(props: {
   /** Custom step logic (e.g. dumbbell rack). Receives the number currently shown. */
   onDec?: (current: number | null) => void;
   onInc?: (current: number | null) => void;
+  /** 'lg' for the big, thumb-friendly version (logging sets, weigh-ins). */
+  size?: 'md' | 'lg';
 }) {
   const { value, onChange, step = 1, min = 0, max = 9999, decimals = false } = props;
   const [text, setText] = useState(value == null ? '' : String(value));
@@ -111,8 +157,8 @@ export function Stepper(props: {
     else setText(value == null ? '' : String(value));
   };
   return (
-    <div class="stepper">
-      <button class="step-btn" aria-label="decrease" onClick={() => (props.onDec ? props.onDec(current()) : onChange(clamp((current() ?? 0) - step)))}>−</button>
+    <div class={`stepper ${props.size === 'lg' ? 'lg' : ''}`}>
+      <button class="step-btn" aria-label="Decrease" onClick={() => (props.onDec ? props.onDec(current()) : onChange(clamp((current() ?? 0) - step)))}>−</button>
       <div class="step-value">
         <input
           type="text"
@@ -126,7 +172,7 @@ export function Stepper(props: {
         />
         {props.unit && <span class="step-unit">{props.unit}</span>}
       </div>
-      <button class="step-btn" aria-label="increase" onClick={() => (props.onInc ? props.onInc(current()) : onChange(clamp((current() ?? 0) + step)))}>+</button>
+      <button class="step-btn" aria-label="Increase" onClick={() => (props.onInc ? props.onInc(current()) : onChange(clamp((current() ?? 0) + step)))}>+</button>
     </div>
   );
 }
@@ -236,5 +282,48 @@ export function PromptHost() {
         </div>
       </form>
     </Sheet>
+  );
+}
+
+/** Settings-style grouped list. */
+export function Group(props: { children: ComponentChildren; title?: string; footer?: ComponentChildren }) {
+  return (
+    <>
+      {props.title && <h3 class="section-title">{props.title}</h3>}
+      <div class="group">{props.children}</div>
+      {props.footer && <p class="fine group-foot">{props.footer}</p>}
+    </>
+  );
+}
+
+export function GroupRow(props: {
+  icon?: ComponentChildren; color?: string; label: ComponentChildren; sub?: ComponentChildren;
+  value?: ComponentChildren; onClick?: () => void; right?: ComponentChildren; danger?: boolean;
+}) {
+  const inner = (
+    <>
+      {props.icon && <span class="row-icon" style={props.color ? { background: props.color } : undefined}>{props.icon}</span>}
+      <span class="row-label">
+        <span class={`block ${props.danger ? 'danger-text' : ''}`}>{props.label}</span>
+        {props.sub && <span class="block muted small">{props.sub}</span>}
+      </span>
+      {props.value != null && <span class="row-value">{props.value}</span>}
+      {props.right}
+      {props.onClick && !props.right && <IconChevron class="row-chev" />}
+    </>
+  );
+  return props.onClick
+    ? <button class="group-row" onClick={props.onClick}>{inner}</button>
+    : <div class="group-row">{inner}</div>;
+}
+
+export function EmptyState(props: { icon: ComponentChildren; title: string; children?: ComponentChildren; action?: ComponentChildren }) {
+  return (
+    <div class="empty-state">
+      {props.icon}
+      <b>{props.title}</b>
+      {props.children && <span class="small">{props.children}</span>}
+      {props.action}
+    </div>
   );
 }

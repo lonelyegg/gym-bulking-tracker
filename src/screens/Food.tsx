@@ -14,7 +14,7 @@ import {
   updateLog, updateQuick, useFoodDay, useFoods, useSavedMeals, type QuickEntry,
 } from '../state/food';
 import { FoodBars, TargetsForm } from '../components/nutrition';
-import { IconChevron, IconChevronLeft, IconPlus } from '../components/icons';
+import { IconBolt, IconChevron, IconChevronLeft, IconCopy, IconEdit, IconPlus, IconTrash } from '../components/icons';
 import { confirmSheet, go, Header, PageTitle, promptSheet, Segmented, Sheet, Stepper, Toggle, toast } from '../components/ui';
 
 /** The day you're looking at (kept while you navigate away and back). */
@@ -80,9 +80,9 @@ export function FoodScreen() {
           <button key={m.id} class="chip" onClick={async () => {
             const r = await logSavedMeal(m, date);
             toast(`${m.name} logged${r.skipped ? ` (${r.skipped} missing food skipped)` : ''}${date === today ? ' · tap Finish when done' : ''}`);
-          }}>⚡ {m.name}</button>
+          }}><IconBolt size={14} /> {m.name}</button>
         ))}
-        <button class="chip" onClick={copyPrevious}>↺ Copy {date === today ? 'yesterday' : 'previous day'}</button>
+        <button class="chip" onClick={copyPrevious}><IconCopy size={14} /> Copy {date === today ? 'yesterday' : 'previous day'}</button>
       </div>
 
       {day && !day.meals.length && (
@@ -340,8 +340,8 @@ function AddFoodSheet(props: { date: string; mealId?: string; foods: Food[]; onC
             </div>
           )}
           <div class="row gap add-modes">
-            <button class="btn grow sm" onClick={() => setMode('quick')}>⚡ Quick add</button>
-            <button class="btn grow sm" onClick={() => setMode('new')}>＋ New food</button>
+            <button class="btn grow sm" onClick={() => setMode('quick')}><IconBolt size={15} /> Quick add</button>
+            <button class="btn grow sm" onClick={() => setMode('new')}><IconPlus size={15} /> New food</button>
           </div>
           <div class="pick-list">
             {loaded === undefined ? null : q.trim() ? pool.filter((f) => matchesSearch(f, q)).map((f) => <Row key={f.id} f={f} />) : (<>
@@ -403,8 +403,8 @@ function SavedMealsSheet({ open, onClose, foods }: { open: boolean; onClose: () 
               <span class="block muted small ellipsis">{m.items.map((it) => (it.food_id ? foods.get(it.food_id)?.name ?? 'deleted food' : it.name || 'Quick add')).join(', ')}</span>
               <span class="block muted small">{r0(totals.kcal)} kcal · {r1(totals.p)} g protein</span>
             </span>
-            <button class="icon-btn sm" aria-label={`Rename ${m.name}`} onClick={async () => { const n = await promptSheet('Rename saved meal', m.name); if (n) await put('saved_meals', { ...m, name: n }); }}>✎</button>
-            <button class="icon-btn sm" aria-label={`Delete ${m.name}`} onClick={async () => { if (await confirmSheet(`Delete saved meal “${m.name}”? Meals you already logged stay.`, 'Delete', true)) await softDelete('saved_meals', [m.id]); }}>✕</button>
+            <button class="icon-btn sm" aria-label={`Rename ${m.name}`} onClick={async () => { const n = await promptSheet('Rename saved meal', m.name); if (n) await put('saved_meals', { ...m, name: n }); }}><IconEdit /></button>
+            <button class="icon-btn sm" aria-label={`Delete ${m.name}`} onClick={async () => { if (await confirmSheet(`Delete saved meal “${m.name}”? Meals you already logged stay.`, 'Delete', true)) await softDelete('saved_meals', [m.id]); }}><IconTrash /></button>
           </div>
         );
       })}

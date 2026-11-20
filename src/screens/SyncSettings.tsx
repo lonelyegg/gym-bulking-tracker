@@ -6,7 +6,7 @@ import {
   connect, disconnect, isConfigured, queueAll, redownloadAll, saveSyncConfig, syncConfig, syncNow, syncStatus,
 } from '../sync/sync';
 import { confirmSheet, go, Toggle, toast } from '../components/ui';
-import { IconCloud, IconInfo } from '../components/icons';
+import { IconCloud, IconDownload, IconInfo, IconUpload } from '../components/icons';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -33,7 +33,7 @@ export function SyncChip() {
   else if (st.state === 'offline') { label = `Offline${pending ? ` · ${pending}` : ''}`; tone = 'warn'; }
   else if (pending > 0) label = `${pending} waiting`;
   else { label = 'Synced'; tone = 'ok'; }
-  return <button class={`sync-chip ${tone}`} onClick={() => go('/settings')}>{tone === 'bad' ? <IconInfo size={14} /> : <IconCloud size={14} />}{label}</button>;
+  return <button class={`sync-chip ${tone}`} onClick={() => go('/settings/sync')}>{tone === 'bad' ? <IconInfo size={14} /> : <IconCloud size={14} />}{label}</button>;
 }
 
 export function SyncSection() {
@@ -56,7 +56,6 @@ export function SyncSection() {
 
   return (
     <>
-      <h3 class="section-title">Google Sheets sync</h3>
       <section class="card form">
         <div class={`sync-line ${line.tone}`}>{line.text}</div>
 
@@ -143,12 +142,11 @@ export function BackupSection() {
 
   return (
     <>
-      <h3 class="section-title">Backup file</h3>
       <section class="card form">
         <p class="small muted">A copy of everything as one file. Last backup: {last ? fmtAgo(last) : 'never'}.
           On iPhone choose <b>Save to Files</b> in the share sheet.</p>
-        <button class="btn block" disabled={busy} onClick={doExport}>Export backup</button>
-        <button class="btn block" disabled={busy} onClick={() => fileInput.current?.click()}>Import backup…</button>
+        <button class="btn primary block" disabled={busy} onClick={doExport}><IconDownload /> Export backup</button>
+        <button class="btn block" disabled={busy} onClick={() => fileInput.current?.click()}><IconUpload /> Import backup…</button>
         <input ref={fileInput} type="file" accept="application/json,.json" hidden
           onChange={(e) => doImport((e.currentTarget as HTMLInputElement).files?.[0])} />
       </section>

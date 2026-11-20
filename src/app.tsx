@@ -32,7 +32,7 @@ function match(path: string) {
     if (b === 'exercise' && c) return { tab: 'plan', el: <ExerciseEditScreen id={c} key={c} /> };
     return { tab: 'plan', el: <PlanScreen /> };
   }
-  if (a === 'settings') return { tab: 'home', el: <SettingsScreen /> };
+  if (a === 'settings') return { tab: 'home', el: <SettingsScreen sub={b} /> };
   if (a === 'food') return { tab: 'food', el: b === 'foods' ? <FoodsScreen /> : <FoodScreen /> };
   if (a === 'body') return { tab: 'body', el: <BodyScreen /> };
   if (a === 'program') return { tab: 'plan', el: <ProgramScreen /> };

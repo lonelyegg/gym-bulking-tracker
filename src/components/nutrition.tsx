@@ -8,7 +8,7 @@ import { dayTotals, proteinTarget, type Nutrients } from '../lib/nutrition';
 import { saveSetting, settings } from '../state/settings';
 import { currentWeight, useBody, weighIns } from '../state/body';
 import { dailyIntake, useFoodDay } from '../state/food';
-import { go, Segmented, Stepper, Toggle, toast } from './ui';
+import { Segmented, Stepper, Toggle, toast } from './ui';
 
 const n0 = (v: number) => Math.round(v).toLocaleString();
 
@@ -127,25 +127,32 @@ export function TargetsForm() {
   const guess = est?.bulk ?? null;
   return (
     <div class="form">
-      <label>Estimate from your body</label>
-      {est ? (
-        <div class="estimate">
-          <span>Maintenance ≈ {est.maintenance.toLocaleString()}<br /><b>Lean bulk ≈ {est.bulk.toLocaleString()} kcal</b></span>
-          {s.kcal_target !== est.bulk && <button class="btn sm primary" onClick={() => { saveSetting('kcal_target', est.bulk); toast(`Calorie target set to ${est.bulk.toLocaleString()}`); }}>Use {est.bulk.toLocaleString()}</button>}
-        </div>
-      ) : <p class="muted small">Add {missing.join(', ')} to get an estimate.</p>}
+      <div class="form-head">About you</div>
       <div class="pair">
-        <div><span class="pair-label">Height</span><Stepper value={s.height_cm} step={1} min={100} max={230} unit="cm" placeholder="cm"
+        <div><span class="pair-label">Height</span><Stepper value={s.height_cm} step={1} min={100} max={230} unit="cm" placeholder="–"
           onChange={(v) => saveSetting('height_cm', v)} onInc={(c) => saveSetting('height_cm', (c ?? 170) + 1)} onDec={(c) => saveSetting('height_cm', (c ?? 170) - 1)} /></div>
-        <div><span class="pair-label">Year born</span><Stepper value={s.birth_year} step={1} min={1930} max={new Date().getFullYear() - 10} placeholder="born"
+        <div><span class="pair-label">Year born</span><Stepper value={s.birth_year} step={1} min={1930} max={new Date().getFullYear() - 10} placeholder="–"
           onChange={(v) => saveSetting('birth_year', v)} onInc={(c) => saveSetting('birth_year', (c ?? 2000) + 1)} onDec={(c) => saveSetting('birth_year', (c ?? 2000) - 1)} /></div>
       </div>
+      <label>Sex (for the formula)</label>
       <Segmented label="Sex (for the formula)" value={s.sex === 'male' ? 'Male' : s.sex === 'female' ? 'Female' : ''} options={['Male', 'Female']}
         onChange={(v) => saveSetting('sex', v === 'Male' ? 'male' : 'female')} />
       <Toggle label="Physical job" hint="On your feet or lifting most of the day" checked={s.physical_job} onChange={(v) => saveSetting('physical_job', v)} />
-      {est && <p class="muted small">Mifflin–St Jeor: {est.bmr.toLocaleString()} kcal at rest × {est.factor} for {sessions} session{sessions === 1 ? '' : 's'} a week{s.physical_job ? ' and a physical job' : ''}, plus 250 for a lean bulk. It’s a starting point: the bulk check corrects it from your real weight trend after 2–3 weeks.</p>}
+      {est ? (<>
+        <div class="estimate">
+          <span class="grow"><span class="block muted small">Maintenance ≈ {est.maintenance.toLocaleString()} kcal</span>
+            <b class="block">Lean bulk ≈ {est.bulk.toLocaleString()} kcal</b></span>
+          {s.kcal_target !== est.bulk
+            ? <button class="btn sm primary" onClick={() => { saveSetting('kcal_target', est.bulk); toast(`Calorie target set to ${est.bulk.toLocaleString()}`); }}>Use</button>
+            : <span class="tag">In use</span>}
+        </div>
+        <details class="more"><summary>How it’s calculated</summary>
+          <p class="muted small">Mifflin–St Jeor: {est.bmr.toLocaleString()} kcal at rest × {est.factor} for {sessions} session{sessions === 1 ? '' : 's'} a week{s.physical_job ? ' and a physical job' : ''}, plus 250 for a lean bulk. It’s a starting point: the bulk check corrects it from your real weight trend after 2–3 weeks.</p>
+        </details>
+      </>) : <p class="muted small">Add {missing.join(', ')} to get a calorie estimate.</p>}
 
-      <label>Daily calories target</label>
+      <div class="form-head">Daily targets</div>
+      <label>Calories</label>
       <Stepper value={s.kcal_target} step={50} min={1000} max={6000} unit="kcal" placeholder={guess ? String(guess) : '2800'}
         onChange={(v) => saveSetting('kcal_target', v)}
         onInc={(c) => saveSetting('kcal_target', Math.min(6000, (c ?? guess ?? 2800) + 50))}
@@ -157,13 +164,12 @@ export function TargetsForm() {
       <label>Protein per kg of bodyweight</label>
       <Stepper value={s.protein_g_per_kg} step={0.1} min={0.8} max={3.5} decimals unit="g/kg" onChange={(v) => saveSetting('protein_g_per_kg', v)} />
       <p class="muted small">{w ? `= ${proteinTarget(w, s.protein_g_per_kg)} g a day at ${w.toFixed(1)} kg${week ? ' (this week’s average)' : ''}.` : 'Log your weight to turn this into grams.'}</p>
-      <label>Target gain per week (% of bodyweight)</label>
+      <div class="form-head">Weight gain per week</div>
       <div class="pair">
         <div><span class="pair-label">Lowest</span><Stepper value={s.gain_rate_min_pct} step={0.05} min={0} max={2} decimals unit="%" onChange={(v) => saveSetting('gain_rate_min_pct', Math.min(v, s.gain_rate_max_pct))} /></div>
         <div><span class="pair-label">Highest</span><Stepper value={s.gain_rate_max_pct} step={0.05} min={0.05} max={2} decimals unit="%" onChange={(v) => saveSetting('gain_rate_max_pct', Math.max(v, s.gain_rate_min_pct))} /></div>
       </div>
       <p class="muted small">{w ? `≈ ${((s.gain_rate_min_pct / 100) * w).toFixed(2)}–${((s.gain_rate_max_pct / 100) * w).toFixed(2)} kg a week. ` : ''}0.25–0.5% is a common lean-bulk range.</p>
-      <button class="btn ghost block" onClick={() => go('/body')}>Go to bodyweight</button>
     </div>
   );
 }

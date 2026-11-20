@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { IconCheck, IconChevron, IconClose, IconTrophy } from './icons';
+import { IconCheck, IconChevron, IconChevronLeft, IconClose, IconTrophy } from './icons';
 
 // ---------- Router (hash based: works on GitHub Pages without rewrites) ----------
 
@@ -207,7 +207,7 @@ export function Header(props: { title: ComponentChildren; back?: boolean | strin
   return (
     <header class="topbar">
       {props.back ? (
-        <button class="icon-btn" aria-label="Back" onClick={() => (typeof props.back === 'string' ? go(props.back) : back())}>‹</button>
+        <button class="icon-btn" aria-label="Back" onClick={() => (typeof props.back === 'string' ? go(props.back) : back())}><IconChevronLeft size={24} /></button>
       ) : <span class="icon-btn-spacer" />}
       <div class="topbar-title">{props.title}</div>
       <div class="topbar-right">{props.right}</div>

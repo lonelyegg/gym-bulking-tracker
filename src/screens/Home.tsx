@@ -68,7 +68,7 @@ export function HomeScreen() {
           <div class="bold">Back up your training log</div>
           <div class="small">It only exists on this phone. Connect your Google Sheet, or export a backup file.</div>
           <div class="row gap mt">
-            <button class="btn sm primary" onClick={() => go('/settings')}>Set up backup</button>
+            <button class="btn sm primary" onClick={() => go('/settings/sync')}>Set up backup</button>
             <button class="btn sm ghost" onClick={async () => {
               setSnoozed(true);
               await setLocal('backup_nudge_until', new Date(Date.now() + 7 * 86400000).toISOString());

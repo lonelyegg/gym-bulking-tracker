@@ -6,7 +6,7 @@ import {
 } from '../db/schema';
 import { primaryMuscle, REGIONS, regionOf, resolveMuscles, summaryLine, type MuscleMap } from '../lib/muscles';
 import { MuscleEditor } from '../components/MuscleEditor';
-import { IconClose, IconDown, IconMoon, IconUp } from '../components/icons';
+import { IconClose, IconDown, IconGear, IconMoon, IconUp } from '../components/icons';
 import { fmtClock, fmtRir, scheduleMode, WEEKDAYS } from '../lib/logic';
 import { saveSetting, settings } from '../state/settings';
 import { ExercisePicker } from '../components/ExercisePicker';
@@ -36,7 +36,7 @@ export function PlanScreen() {
 
   return (
     <div class="page">
-      <PageTitle title="Plan" right={<button class="btn sm" onClick={() => go('/settings')}>Settings</button>} />
+      <PageTitle title="Plan" right={<button class="icon-btn sm gear" aria-label="Settings" onClick={() => go('/settings')}><IconGear size={20} /></button>} />
       <section class="card">
         <div class="row between center">
           <span class="bold">Sessions per week</span>

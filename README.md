@@ -10,7 +10,9 @@ A personal, free, phone-first workout and bulking tracker. It's an installable w
 | 2 | Google Sheets sync via Apps Script, JSON export/import | ✅ |
 | 3 | Dashboard: icon calendar, streak, PRs, e1RM charts, rest stats | ✅ |
 | 4 | Bodyweight, measurements, food log (with meal start/finish times), bulk check | ✅ |
-| 5 | Progress photos | ✅ this release |
+| 5 | Progress photos | ✅ |
+
+**v0.8: design refresh.** New colour system (one colour per area: mint training, orange food, blue body, gold records, pink photos), SVG icons instead of emoji, sheets you can swipe down to close, iOS-style grouped Settings with a page per area, a workout screen that highlights the exercise and set you're on, a summary with a body map of the muscles you trained, a tile grid for day types, and a new app icon. If you don't like a change, each part is its own commit and can be reverted on its own.
 
 ---
 
@@ -82,7 +84,7 @@ Food → Targets (or Settings): enter height, year born and sex. It shows mainte
 
 ## Food, body and the bulk check (Phase 4)
 
-**Tabs:** Home · Food · Body · History · Plan. Settings is the ⚙︎ on Home (and the button on Plan).
+**Tabs:** Home · Food · Body · History · Plan. Settings is the gear on Home and Plan: grouped rows (Rest timer, Sounds & alerts, Equipment, Targets, Sync, Backup), each opening its own page.
 
 ### Food
 - **Targets.** Two bars, calories and protein, on the Food tab and inside Home's Today card. Protein target = 1.8 g × your current bodyweight (editable). Set them under **Targets** on the Food tab, or in Settings.
@@ -124,7 +126,7 @@ The app is built around what iOS allows a web app to do. Here's the honest versi
 |---|---|---|
 | Timer stays accurate when the screen locks or you switch apps | ✅ | It stores an end time instead of counting ticks, so it's correct as soon as you come back. |
 | Beep when rest ends, app open and screen on | ✅ | This is the reliable setup. **Keep screen on** (Wake Lock) is on by default during workouts. |
-| Beep doesn't stop Spotify | ✅ (test it) | The app uses `navigator.audioSession`. "Duck music" (`transient`) briefly lowers Spotify; "Mix with music" (`ambient`) plays over it. Use **Settings → Test beep** with Spotify playing to choose one. The ring/silent switch may mute the beep. |
+| Beep doesn't stop Spotify | ✅ (test it) | The app uses `navigator.audioSession`. "Duck music" (`transient`) briefly lowers Spotify; "Mix with music" (`ambient`) plays over it. Use **Settings → Sounds & alerts → Test beep** with Spotify playing to choose one. The ring/silent switch may mute the beep. |
 | Beep or notification with the **screen locked** | ❌ | iOS pauses web apps when the screen locks. Web apps can't schedule local notifications, and real push would need a server that can sign push messages, which a free Apps Script can't do. |
 | Notification while you're briefly in another app | ⚠️ | Only in the installed app, after you tap **Allow notifications** in Settings. iOS pauses background web apps within seconds, so treat it as a bonus. |
 | Vibration | ❌ | Safari on iOS doesn't support the Vibration API. It works on Android. |
@@ -136,7 +138,7 @@ The app is built around what iOS allows a web app to do. Here's the honest versi
 1. Open the site in **Safari** (other browsers on iOS can't install web apps with full features).
 2. Tap **Share** → **Add to Home Screen** → **Add**.
 3. Open it from the home screen icon. It now runs full screen and works offline.
-4. In **Settings**, tap **Test beep** (with Spotify playing) and **Allow notifications**.
+4. In **Settings → Sounds & alerts**, tap **Test beep** (with Spotify playing) and **Allow notifications**.
 
 > The installed app has **its own storage**, separate from Safari's. Data you log in Safari won't appear in the installed app. Install first, then start logging.
 
@@ -147,10 +149,10 @@ Everything is stored on your phone in IndexedDB, and nothing waits on the networ
 ## Sync and backup (Phase 2)
 
 - **Google Sheets sync (recommended).** Your phone stays the source of truth. Changes are queued and uploaded in the background, so retries are safe and never duplicate rows. Sync runs on launch, when you return to the app, when you come back online, every 5 minutes, and a few seconds after you finish a workout. **It never runs during a workout.** A workout in progress is uploaded when you finish it.
-- **Status.** The chip at the top of Home shows ☁️ Synced / N waiting / Offline / ⚠️ Sync problem. Settings → Google Sheets sync has **Sync now** and the details.
+- **Status.** The chip at the top of Home shows Synced / N waiting / Offline / Sync problem; tap it to open Settings → Google Sheets sync, which has **Sync now** and the details.
 - **New phone or lost data.** Install the app, go to Settings, paste the URL and token, tap **Connect**. Everything is downloaded back. Seed exercises and presets never duplicate.
 - **Conflicts.** For each record the **newest** `updated_at` wins. If you edit the same thing on two devices while offline, the later edit wins.
-- **Backup file.** Settings → **Export backup** saves one JSON file with everything (on iPhone, choose **Save to Files** in the share sheet). **Import backup…** merges a file into the phone: the newest copy of each record wins, so importing never loses newer data. Imported records are also uploaded to the Sheet. The backup never contains your sync URL or token.
+- **Backup file.** Settings → Backup file → **Export backup** saves one JSON file with everything (on iPhone, choose **Save to Files** in the share sheet). **Import backup…** merges a file into the phone: the newest copy of each record wins, so importing never loses newer data. Imported records are also uploaded to the Sheet. The backup never contains your sync URL or token.
 - **Backup reminder.** If you have 3 or more workouts, no sync and no backup in 14 days, Home shows a small reminder (you can snooze it).
 - **Advanced** (Settings → Google Sheets sync → Advanced): re-download everything from the Sheet, re-upload everything to it, or disconnect. Connecting to a *different* Sheet automatically re-uploads everything to it.
 

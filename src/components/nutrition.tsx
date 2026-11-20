@@ -9,6 +9,7 @@ import { saveSetting, settings } from '../state/settings';
 import { currentWeight, useBody, weighIns } from '../state/body';
 import { dailyIntake, useFoodDay } from '../state/food';
 import { Segmented, Stepper, Toggle, toast } from './ui';
+import { IconCheck, IconDown, IconInfo, IconTrend, IconUp } from './icons';
 
 const n0 = (v: number) => Math.round(v).toLocaleString();
 
@@ -52,11 +53,11 @@ export function FoodBars({ date = localDate(), totals, compact }: { date?: strin
 }
 
 const STATUS = {
-  'no-data': { icon: '○', label: 'Not enough data yet', tone: 'muted' },
-  slow: { icon: '▲', label: 'Gaining too slowly', tone: 'warn' },
-  'on-track': { icon: '✓', label: 'On track', tone: 'good' },
-  'bit-fast': { icon: '!', label: 'A little fast', tone: 'warn' },
-  fast: { icon: '▼', label: 'Gaining too fast', tone: 'bad' },
+  'no-data': { icon: <IconTrend size={15} />, label: 'Not enough data yet', tone: 'muted' },
+  slow: { icon: <IconUp size={15} />, label: 'Gaining too slowly', tone: 'warn' },
+  'on-track': { icon: <IconCheck size={15} />, label: 'On track', tone: 'good' },
+  'bit-fast': { icon: <IconInfo size={15} />, label: 'A little fast', tone: 'warn' },
+  fast: { icon: <IconDown size={15} />, label: 'Gaining too fast', tone: 'bad' },
 } as const;
 
 export function useBulkCheck() {
@@ -72,10 +73,32 @@ export function useBulkCheck() {
 const kg2 = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)} kg`;
 
 /** Bulk check: rate of gain vs target, average intake next to it, and what to change. */
-export function BulkCheckView() {
+export function BulkCheckView({ compact }: { compact?: boolean }) {
   const r = useBulkCheck();
   if (!r) return null;
   const st = STATUS[r.status];
+  const advice = r.delta != null && (
+    <div class="bulk-advice">
+      <div>
+        {r.delta > 0 ? 'Eat a little more: ' : 'Ease off a little: '}
+        <b>{r.delta > 0 ? '+' : '−'}{Math.abs(r.delta)} kcal/day</b>
+        {r.suggestedTarget != null && <> → about <b>{n0(r.suggestedTarget)} kcal</b></>}
+      </div>
+      {r.suggestedTarget != null && r.suggestedTarget !== settings.value.kcal_target && (
+        <button class="btn sm tinted" onClick={() => { saveSetting('kcal_target', r.suggestedTarget); toast(`Calorie target set to ${n0(r.suggestedTarget!)}`); }}>Set as target</button>
+      )}
+    </div>
+  );
+  if (compact) {
+    return (
+      <div class="bulk compact">
+        <div class={`bulk-status ${st.tone}`}><span class="bulk-icon">{st.icon}</span>
+          <span class="grow">{st.label}{r.status !== 'no-data' && <span class="block muted small">Target {r.targetKg![0].toFixed(2)}–{r.targetKg![1].toFixed(2)} kg a week</span>}</span>
+        </div>
+        {advice}
+      </div>
+    );
+  }
   return (
     <div class="bulk">
       <div class={`bulk-status ${st.tone}`}><span class="bulk-icon">{st.icon}</span>{st.label}</div>
@@ -91,18 +114,7 @@ export function BulkCheckView() {
             {r.avgIntake != null && r.intakeDays < r.windowDays * 0.7 && ` Food logged on ${r.intakeDays} of ${r.windowDays} days, so the average may be off.`}
             {r.avgIntake == null && ' Log your food to see your average intake here.'}
           </p>
-          {r.delta != null && (
-            <div class="bulk-advice">
-              <div>
-                {r.delta > 0 ? 'Eat a little more: ' : 'Ease off a little: '}
-                <b>{r.delta > 0 ? '+' : '−'}{Math.abs(r.delta)} kcal/day</b>
-                {r.suggestedTarget != null && <> → about <b>{n0(r.suggestedTarget)} kcal</b></>}
-              </div>
-              {r.suggestedTarget != null && r.suggestedTarget !== settings.value.kcal_target && (
-                <button class="btn sm primary" onClick={() => { saveSetting('kcal_target', r.suggestedTarget); toast(`Calorie target set to ${n0(r.suggestedTarget!)}`); }}>Set as target</button>
-              )}
-            </div>
-          )}
+          {advice}
           {r.status === 'on-track' && <p class="small">Keep eating about the same{r.avgIntake != null ? ` (~${n0(r.avgIntake)} kcal)` : ''}. Check again next week.</p>}
           {r.status === 'bit-fast' && <p class="small">Slightly above your target range. No change needed yet; check again next week.</p>}
         </>

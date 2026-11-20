@@ -294,7 +294,7 @@ export function PhotoCompareCard({ title = true }: { title?: boolean }) {
       {!dates.length ? (
         <>
           <p class="empty-note">Photos show changes the scale and tape miss. Take a front, side and back set now, then every 4 weeks.</p>
-          <button class="btn primary block" onClick={(e) => { e.stopPropagation(); go('/photos/capture'); }}>Take your first photos</button>
+          <button class="btn tinted block" onClick={(e) => { e.stopPropagation(); go('/photos/capture'); }}><IconCamera size={18} /> Take your first photos</button>
         </>
       ) : (
         <>
@@ -303,7 +303,7 @@ export function PhotoCompareCard({ title = true }: { title?: boolean }) {
             {last !== first && <div class="compare-col"><PhotoImg photo={photoOf(photos, last, 'front') ?? photos.filter((p) => p.date === last).at(-1)} /><div class="muted small center-text">Latest · {fmtDate(last)}</div></div>}
           </div>
           <p class={`small ${due.due ? 'warn-text' : 'muted'}`}>{due.due ? 'New set due: it’s been 4+ weeks.' : `Next set in ${due.inDays} day${due.inDays === 1 ? '' : 's'}.`}</p>
-          {due.due && <button class="btn primary block" onClick={(e) => { e.stopPropagation(); go('/photos/capture'); }}>Take photos</button>}
+          {due.due && <button class="btn tinted block" onClick={(e) => { e.stopPropagation(); go('/photos/capture'); }}><IconCamera size={18} /> Take photos</button>}
         </>
       )}
     </section>

@@ -684,3 +684,38 @@ button.group-row:active { background: var(--surface-2); }
 .timer-panel .timer-bar > div { background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 4px; }
 .timer-actions .btn { background: var(--surface-3); border-radius: 14px; font-weight: 650; }
 .summary-stats .stat-value { white-space: nowrap; }
+
+/* plan */
+.section-row { display: flex; align-items: flex-end; justify-content: space-between; }
+.section-row .section-title { margin-bottom: 8px; }
+.section-action { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 650; font-size: 15px; padding: 6px 4px 8px; }
+.tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.day-tile { --c: var(--accent); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; min-height: 96px; text-align: left;
+  background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 70%), var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); transition: transform .1s ease; }
+.day-tile:active { transform: scale(.97); }
+.day-tile .day-dot { margin-bottom: 6px; }
+.day-tile-name { font-weight: 700; font-size: 16px; line-height: 1.2; }
+.mini-stepper { width: 122px; flex-shrink: 0; }
+.mini-stepper .stepper { gap: 4px; }
+.mini-stepper .stepper .step-btn { width: 36px; height: 36px; font-size: 20px; border-radius: 10px; }
+.mini-stepper .stepper .step-value input { height: 36px; font-size: 17px; padding: 0 4px; }
+.group .group-row .block.bold { font-weight: 600; }
+.row-chev { color: var(--faint); flex-shrink: 0; }
+.list-item .row-chev { margin-left: auto; }
+
+/* home */
+.mt-sm { margin-top: 10px; }
+.callout .grow > b { display: block; margin-bottom: 1px; }
+.weighin-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.weighin-row .btn { min-height: 48px; padding: 0 18px; }
+.bulk.compact { display: grid; gap: 10px; }
+.bulk.compact .bulk-status { align-items: center; }
+.bulk-icon .icon { stroke-width: 2.6; }
+.bulk.compact .bulk-status { display: flex; }
+.group-row.rec { min-height: 48px; gap: 10px; }
+.nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gap-xs { gap: 4px; }
+.link.row { display: inline-flex; align-items: center; }
+.group-row.wk { min-height: 62px; }
+.group-row.wk + .group-row.wk::before { left: 66px; }

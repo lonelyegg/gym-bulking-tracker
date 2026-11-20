@@ -6,14 +6,14 @@ import { prEvents, workoutsByDate } from '../lib/stats';
 import { useTraining } from '../state/training';
 import { deleteWorkout, summarize } from '../state/workout';
 import { MonthCalendar, monthLabel } from '../components/Calendar';
-import { IconCheck, IconChevron, IconEdit, IconTrophy } from '../components/icons';
+import { IconCalendar, IconCheck, IconChevron, IconEdit, IconTrophy } from '../components/icons';
 import { BodyMap } from '../components/BodyMap';
 import { muscleLabel, resolveMuscles, type Muscle, type MuscleMap } from '../lib/muscles';
 import { fmtDay, PrRow } from '../components/PrRow';
 import { usePlan } from '../components/usePlan';
 import { DAY_LIFTS, LIFT_NAME, replay, type Day } from '../lib/program';
 import { programConfig } from '../state/program';
-import { confirmSheet, go, Header, PageTitle } from '../components/ui';
+import { confirmSheet, EmptyState, go, Header, PageTitle } from '../components/ui';
 
 /** Kept across navigation, so coming back from a workout returns to the same month. */
 export const historyMonth = signal(localDate().slice(0, 7));
@@ -58,12 +58,12 @@ export function HistoryScreen() {
       </div>
 
       <h3 class="section-title">{monthLabel(month)}</h3>
-      {!list.length && <p class="empty">No workouts this month.</p>}
-      {list.map((w) => {
+      {!list.length && <EmptyState icon={<IconCalendar size={28} />} title="No workouts this month">Tap a day on the calendar to log one you missed.</EmptyState>}
+      {list.length > 0 && <div class="group">{list.map((w) => {
         const st = perWorkout.get(w.id);
         const prs = prCount.get(w.id) ?? 0;
         return (
-          <button key={w.id} class="list-item" onClick={() => go(`/w/${w.id}`)}>
+          <button key={w.id} class="group-row wk" onClick={() => go(`/w/${w.id}`)}>
             <span class="day-dot" style={{ background: w.color }}>{w.icon}</span>
             <span class="grow left">
               <span class="block bold">{w.name}</span>
@@ -75,10 +75,11 @@ export function HistoryScreen() {
               </span>
             </span>
             {prs > 0 && <span class="pr-pill"><IconTrophy size={14} /> {prs}</span>}
-            <IconChevron class="muted" />
+            <IconChevron class="row-chev" />
           </button>
         );
-      })}
+      })}</div>}
+      <div class="bottom-space" />
     </div>
   );
 }

@@ -14,8 +14,8 @@ import {
   updateLog, updateQuick, useFoodDay, useFoods, useSavedMeals, type QuickEntry,
 } from '../state/food';
 import { FoodBars, TargetsForm } from '../components/nutrition';
-import { IconBolt, IconChevron, IconChevronLeft, IconCopy, IconEdit, IconPlus, IconTrash } from '../components/icons';
-import { confirmSheet, go, Header, PageTitle, promptSheet, Segmented, Sheet, Stepper, Toggle, toast } from '../components/ui';
+import { IconBolt, IconCheck, IconChevron, IconChevronLeft, IconCopy, IconEdit, IconFood, IconPlus, IconTrash } from '../components/icons';
+import { confirmSheet, go, Group, GroupRow, Header, PageTitle, promptSheet, Segmented, Sheet, Stepper, Toggle, toast } from '../components/ui';
 
 /** The day you're looking at (kept while you navigate away and back). */
 export const foodDate = signal(localDate());
@@ -102,10 +102,10 @@ export function FoodScreen() {
         </section>
       )}
 
-      <div class="row gap mt">
-        <button class="btn grow" onClick={() => go('/food/foods')}>My foods</button>
-        <button class="btn grow" onClick={() => setManageSaved(true)}>Saved meals</button>
-      </div>
+      <Group title="Library">
+        <GroupRow icon={<IconFood size={18} />} color="var(--c-food)" label="My foods" value={String(foods.length)} onClick={() => go('/food/foods')} />
+        <GroupRow icon={<IconBolt size={18} />} color="var(--c-pr)" label="Saved meals" value={String(saved.length)} onClick={() => setManageSaved(true)} />
+      </Group>
       <div class="bottom-space" />
 
       {adding && <AddFoodSheet date={date} mealId={adding.mealId} foods={foods} onClose={() => setAdding(null)} />}
@@ -155,10 +155,10 @@ function MealCard(props: {
           <span class="block muted small num">{r1(t.protein_g)} g protein</span>
         </span>
       </div>
-      {eating && <button class="btn primary block sm" onClick={() => finishMeal(meal)}>Finish meal</button>}
+      {eating && <button class="btn tinted block sm" onClick={() => finishMeal(meal)}><IconCheck size={16} /> Finish meal</button>}
       {logs.map((l) => <LogRow key={l.id} log={l} food={l.food_id ? props.foods.get(l.food_id) : undefined} onClick={() => props.onEdit(l)} />)}
       <div class="meal-actions">
-        <button class="link" onClick={props.onAdd}>+ Add food</button>
+        <button class="link row gap-xs" onClick={props.onAdd}><IconPlus size={16} /> Add food</button>
         <button class="link muted-link" onClick={() => setMenu(true)}>Edit</button>
       </div>
 
@@ -428,15 +428,15 @@ export function FoodsScreen() {
       {groups.map((g) => (
         <section key={g.restaurant ?? '—'}>
           {hasPlaces && <h3 class="section-title">{g.restaurant ?? 'Other'} · {g.foods.length}</h3>}
-          {g.foods.map((f) => (
-            <button key={f.id} class="list-item" onClick={() => setEditing(f)}>
+          <div class="group">{g.foods.map((f) => (
+            <button key={f.id} class="group-row" onClick={() => setEditing(f)}>
               <span class="grow left">
                 <span class="block bold">{f.name}</span>
                 <span class="block muted small">{r0(f.kcal)} kcal · {r1(f.protein_g)} g protein per {f.basis === 'per_100g' ? '100 g' : f.serving_label || 'serving'}</span>
               </span>
-              <span class="muted">›</span>
+              <IconChevron class="row-chev" />
             </button>
-          ))}
+          ))}</div>
         </section>
       ))}
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? 'New food' : 'Edit food'}>

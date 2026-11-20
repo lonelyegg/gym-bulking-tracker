@@ -238,7 +238,7 @@ export function Section(props: {
   const head = (
     <>
       <span class="section-head-title" style={{ color: props.tone }}>{props.icon}{props.title}</span>
-      {props.onMore && <span class="section-head-more">{props.more ?? ''}<span class="chev">›</span></span>}
+      {props.onMore && <span class="section-head-more">{props.more ?? ''}<IconChevron size={16} class="chev" /></span>}
     </>
   );
   return (

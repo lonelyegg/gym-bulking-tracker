@@ -17,7 +17,7 @@ import { useTraining, type TrainingData } from '../state/training';
 import { computeNextUp, getActiveWorkout, startWorkout } from '../state/workout';
 import { MonthCalendar } from '../components/Calendar';
 import { ColumnChart, LineChart } from '../components/charts';
-import { IconGear, IconMoon, IconScale } from '../components/icons';
+import { IconChevron, IconCloud, IconGear, IconMoon, IconScale } from '../components/icons';
 import { IconDumbbell, IconFlame, IconPlay, IconTimer, IconTrend, IconTrophy } from '../components/icons';
 import { fmtDay, PrRow } from '../components/PrRow';
 import { go, PageTitle, Section, Segmented } from '../components/ui';
@@ -64,17 +64,20 @@ export function HomeScreen() {
       <TodayCard data={data} />
 
       {needsBackup && (
-        <section class="card warn-card">
-          <div class="bold">Back up your training log</div>
-          <div class="small">It only exists on this phone. Connect your Google Sheet, or export a backup file.</div>
-          <div class="row gap mt">
-            <button class="btn sm primary" onClick={() => go('/settings/sync')}>Set up backup</button>
-            <button class="btn sm ghost" onClick={async () => {
-              setSnoozed(true);
-              await setLocal('backup_nudge_until', new Date(Date.now() + 7 * 86400000).toISOString());
-            }}>Not now</button>
-          </div>
-        </section>
+        <div class="callout warn">
+          <IconCloud size={20} />
+          <span class="grow">
+            <b>Back up your training log</b>
+            <span class="block small muted">It only exists on this phone. Connect your Google Sheet, or export a backup file.</span>
+            <span class="row gap-sm mt-sm">
+              <button class="btn sm tinted" onClick={() => go('/settings/sync')}>Set up backup</button>
+              <button class="btn sm ghost" onClick={async () => {
+                setSnoozed(true);
+                await setLocal('backup_nudge_until', new Date(Date.now() + 7 * 86400000).toISOString());
+              }}>Not now</button>
+            </span>
+          </span>
+        </div>
       )}
 
       {data && <Consistency data={data} />}
@@ -298,7 +301,10 @@ function MuscleVolume({ data }: { data: TrainingData }) {
     return [...names].map(([id, n]) => `${data.exercises.get(id)?.name ?? 'Exercise'} ×${n}`);
   }, [sel, data]);
   const fmt = (n: number) => (Math.round(n * 2) / 2).toString();
+  const [all, setAll] = useState(false);
   if (!data.workouts.length) return null;
+  const trained = MUSCLES.filter((m) => (sets[m.id] ?? 0) > 0).sort((a, b) => (sets[b.id] ?? 0) - (sets[a.id] ?? 0));
+  const rows = all ? MUSCLES : trained.slice(0, 8);
 
   return (
     <Section title="Muscles · last 7 days" icon={<IconDumbbell size={16} />} tone={TONE.muscles}>
@@ -311,7 +317,7 @@ function MuscleVolume({ data }: { data: TrainingData }) {
         </div>
       )}
       <div class="mv-grid">
-        {MUSCLES.map((m) => {
+        {rows.map((m) => {
           const v = sets[m.id] ?? 0;
           return (
             <button key={m.id} class={`mv-row ${sel === m.id ? 'sel' : ''}`} onClick={() => setSel(sel === m.id ? null : m.id)}>
@@ -321,6 +327,9 @@ function MuscleVolume({ data }: { data: TrainingData }) {
           );
         })}
       </div>
+      {(all || trained.length > rows.length || trained.length < MUSCLES.length) && (
+        <button class="btn ghost block sm" onClick={() => setAll(!all)}>{all ? 'Show trained muscles' : `Show all ${MUSCLES.length} muscles`}</button>
+      )}
       <p class="fine">Sets for each muscle's main exercises count fully; muscles that are only partly worked count half. Many lifters aim for about 10–20 sets per muscle per week when building size.</p>
     </Section>
   );
@@ -409,7 +418,7 @@ function Strength({ data, slice, range }: { data: TrainingData; slice: Slice; ra
           ) : <p class="empty-note">One session in this period. The line appears after your next one.</p>}
         </>
       ) : <p class="empty-note">No {name(lift!)} sessions in the last {periodName[range]}. Try a longer range.</p>}
-      <button class="card-link" onClick={() => go(`/exercise/${lift}`)}>{name(lift!)}: records, muscles &amp; history<span class="chev">›</span></button>
+      <button class="card-link" onClick={() => go(`/exercise/${lift}`)}>{name(lift!)}: records, muscles &amp; history<IconChevron size={16} class="chev" /></button>
     </Section>
   );
 }
@@ -489,7 +498,7 @@ function BodyweightCard() {
           points={pts.map((p) => ({ key: p.date, x: Date.parse(`${p.date}T12:00:00`), kg: p.kg, avg: p.avg }))}
           formatX={(x) => new Date(x).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} />}
       </>)}
-      <div class="bulk-wrap"><BulkCheckView /></div>
+      <div class="bulk-wrap"><BulkCheckView compact /></div>
     </Section>
   );
 }

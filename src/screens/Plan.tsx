@@ -6,12 +6,12 @@ import {
 } from '../db/schema';
 import { primaryMuscle, REGIONS, regionOf, resolveMuscles, summaryLine, type MuscleMap } from '../lib/muscles';
 import { MuscleEditor } from '../components/MuscleEditor';
-import { IconClose, IconDown, IconGear, IconMoon, IconUp } from '../components/icons';
+import { IconCalendar, IconChevron, IconClose, IconDown, IconGear, IconList, IconMoon, IconPlus, IconUp } from '../components/icons';
 import { fmtClock, fmtRir, scheduleMode, WEEKDAYS } from '../lib/logic';
 import { saveSetting, settings } from '../state/settings';
 import { ExercisePicker } from '../components/ExercisePicker';
 import {
-  back, confirmSheet, DAY_COLORS, DAY_ICONS, go, Header, PageTitle, RirPicker, Segmented, Sheet, Stepper, toast,
+  back, confirmSheet, DAY_COLORS, DAY_ICONS, go, Group, GroupRow, Header, PageTitle, RirPicker, Segmented, Sheet, Stepper, toast,
 } from '../components/ui';
 
 const liveDayTypes = async () => (await db.day_types.toArray()).filter((d) => !d.deleted).sort((a, b) => a.name.localeCompare(b.name));
@@ -34,15 +34,24 @@ export function PlanScreen() {
     go(`/plan/day/${d.id}`);
   };
 
+  const sorted = [...splits].sort((a, b) => Number(b.id === activeId) - Number(a.id === activeId));
+  const counts = useLive(async () => {
+    const m: Record<string, number> = {};
+    for (const t of await db.template_exercises.toArray()) if (!t.deleted) m[t.day_type_id] = (m[t.day_type_id] ?? 0) + 1;
+    return m;
+  }, []) ?? {};
+  const exCount = useLive(async () => (await db.exercises.toArray()).filter((e) => !e.deleted).length, []) ?? 0;
+
   return (
     <div class="page">
       <PageTitle title="Plan" right={<button class="icon-btn sm gear" aria-label="Settings" onClick={() => go('/settings')}><IconGear size={20} /></button>} />
-      <section class="card">
-        <div class="row between center">
-          <span class="bold">Sessions per week</span>
-          <div class="w-50"><Stepper value={settings.value.weekly_target} min={1} max={14} onChange={(v) => saveSetting('weekly_target', v)} /></div>
+      <div class="group">
+        <div class="group-row">
+          <span class="row-icon" style={{ background: 'var(--c-train)' }}><IconCalendar size={18} /></span>
+          <span class="row-label nowrap">Sessions per week</span>
+          <div class="mini-stepper"><Stepper value={settings.value.weekly_target} min={1} max={14} onChange={(v) => saveSetting('weekly_target', v)} /></div>
         </div>
-      </section>
+      </div>
 
       <h3 class="section-title">Programs</h3>
       <button class={`list-item ${programOn ? 'active-split' : ''}`} onClick={() => go('/program')}>
@@ -51,11 +60,11 @@ export function PlanScreen() {
           <span class="block bold">StrongLifts 5×5 {programOn && <span class="tag">Active</span>}</span>
           <span class="block muted small">Squat, bench, row, press, deadlift · 3×/week · weights go up for you, deloads when you stall</span>
         </span>
-        <span class="muted">›</span>
+        <IconChevron class="row-chev" />
       </button>
 
-      <h3 class="section-title">Splits</h3>
-      {splits.map((s) => (
+      <div class="section-row"><h3 class="section-title">Splits</h3><button class="section-action" onClick={newSplit}><IconPlus size={16} /> New</button></div>
+      {sorted.map((s) => (
         <button key={s.id} class={`list-item ${s.id === activeId ? 'active-split' : ''}`} onClick={() => go(`/plan/split/${s.id}`)}>
           <span class="grow left">
             <span class="block bold">{s.name} {s.id === activeId && <span class="tag">Active</span>}</span>
@@ -65,25 +74,24 @@ export function PlanScreen() {
                 : <span key={i} class="rot-chip" style={{ background: dt(id)?.color }}>{dt(id)?.icon}</span>)}
             </span>
           </span>
-          <span class="muted">›</span>
+          <IconChevron class="row-chev" />
         </button>
       ))}
-      <button class="btn ghost block" onClick={newSplit}>+ New split</button>
 
-      <h3 class="section-title">Day types</h3>
-      {dayTypes.map((d) => (
-        <button key={d.id} class="list-item" onClick={() => go(`/plan/day/${d.id}`)}>
-          <span class="day-dot" style={{ background: d.color }}>{d.icon}</span>
-          <span class="grow left bold">{d.name}</span>
-          <span class="muted">›</span>
-        </button>
-      ))}
-      <button class="btn ghost block" onClick={newDay}>+ New day type</button>
+      <div class="section-row"><h3 class="section-title">Day types</h3><button class="section-action" onClick={newDay}><IconPlus size={16} /> New</button></div>
+      <div class="tile-grid">
+        {dayTypes.map((d) => (
+          <button key={d.id} class="day-tile" style={{ '--c': d.color }} onClick={() => go(`/plan/day/${d.id}`)}>
+            <span class="day-dot" style={{ background: d.color }}>{d.icon}</span>
+            <span class="day-tile-name">{d.name}</span>
+            <span class="muted small">{counts[d.id] ?? 0} exercise{counts[d.id] === 1 ? '' : 's'}</span>
+          </button>
+        ))}
+      </div>
 
-      <h3 class="section-title">Library</h3>
-      <button class="list-item" onClick={() => go('/plan/exercises')}>
-        <span class="grow left bold">Exercise library</span><span class="muted">›</span>
-      </button>
+      <Group title="Library">
+        <GroupRow icon={<IconList size={18} />} color="var(--c-rest)" label="Exercise library" value={String(exCount)} onClick={() => go('/plan/exercises')} />
+      </Group>
       <div class="bottom-space" />
     </div>
   );
@@ -161,7 +169,7 @@ export function SplitEditorScreen({ id }: { id: string }) {
         <button key={wd} class="list-item" onClick={() => setSlot(i)}>
           <span class="weekday">{wd}</span>
           {label(split.rotation[i] ?? REST)}
-          <span class="muted">›</span>
+          <IconChevron class="row-chev" />
         </button>
       )) : (<>
         {split.rotation.map((entry, i) => (
@@ -320,16 +328,16 @@ export function ExercisesScreen() {
       {groups.map(([r, l]) => (
         <section key={r.id}>
           <h3 class="section-title">{r.label}</h3>
-          {l.map((e) => (
-            <button key={e.id} class="list-item" onClick={() => go(`/exercise/${e.id}`)}>
+          <div class="group">{l.map((e) => (
+            <button key={e.id} class="group-row" onClick={() => go(`/exercise/${e.id}`)}>
               <span class="grow left">
                 <span class="block bold">{e.name}</span>
                 <span class="block muted small ellipsis">{summaryLine(resolveMuscles(e))}</span>
                 <span class="block muted small">{e.equipment} · +{e.equipment === 'dumbbell' ? 'rack' : `${e.increment_kg} kg`} · rest {fmtClock(e.default_rest_s)}</span>
               </span>
-              <span class="muted">›</span>
+              <IconChevron class="row-chev" />
             </button>
-          ))}
+          ))}</div>
         </section>
       ))}
       <div class="bottom-space" />

@@ -7,7 +7,7 @@ import { addDays, RANGES, rangeBounds, type Range } from '../lib/stats';
 import { saveSetting, settings } from '../state/settings';
 import { logMeasurements, logWeight, useBody, weighIns, type BodyData } from '../state/body';
 import { WeightChart } from '../components/charts';
-import { IconScale, IconTrend } from '../components/icons';
+import { IconChevron, IconPlus, IconScale, IconTrend } from '../components/icons';
 import { BulkCheckView } from '../components/nutrition';
 import { PhotoCompareCard } from './Photos';
 import { confirmSheet, PageTitle, promptSheet, Section, Segmented, Sheet, Stepper, toast } from '../components/ui';
@@ -53,16 +53,29 @@ export function WeighInCard({ body, compact }: { body: BodyData; compact?: boole
       </div>
     );
   }
+  if (compact) {
+    return (
+      <div class="weighin compact">
+        <div class="muted small">{todays ? 'Edit today’s weigh-in' : 'Log today’s weight'}</div>
+        <div class="weighin-row">
+          <Stepper value={kg} step={0.1} min={20} max={300} decimals unit="kg" placeholder="kg" onChange={setKg} />
+          <button class="btn tinted" disabled={!kg} onClick={async () => {
+            await logWeight(today, kg, undefined);
+            setEditing(false);
+            toast(`Logged ${kg1(kg!)} kg ✓`);
+          }}>Save</button>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div class={compact ? 'weighin compact' : 'card weighin'}>
-      <div class="muted small">{todays ? 'Edit today’s weigh-in' : 'Log today’s weight'}{!compact && ' (same time each morning is most consistent)'}</div>
-      <Stepper size={compact ? 'md' : 'lg'} value={kg} step={0.1} min={20} max={300} decimals unit="kg" placeholder="kg" onChange={setKg} />
-      {!compact && (<>
-        <div class="muted small">Sleep last night (optional)</div>
-        <Stepper value={sleep} step={0.5} min={0} max={16} decimals unit="h" placeholder="–" onChange={setSleep} />
-      </>)}
+    <div class="card weighin">
+      <div class="muted small">{todays ? 'Edit today’s weigh-in' : 'Log today’s weight'} (same time each morning is most consistent)</div>
+      <Stepper size="lg" value={kg} step={0.1} min={20} max={300} decimals unit="kg" placeholder="kg" onChange={setKg} />
+      <div class="muted small">Sleep last night (optional)</div>
+      <Stepper value={sleep} step={0.5} min={0} max={16} decimals unit="h" placeholder="–" onChange={setSleep} />
       <button class="btn primary block" disabled={!kg} onClick={async () => {
-        await logWeight(today, kg, compact ? undefined : sleep);
+        await logWeight(today, kg, sleep);
         setEditing(false);
         toast(`Logged ${kg1(kg!)} kg ✓`);
       }}>Save</button>
@@ -163,7 +176,7 @@ function MeasureSheet({ body, onClose }: { body: BodyData; onClose: () => void }
           const id = siteId(name);
           if (sites.some((x) => x.id === id)) { toast('You already track that.'); return; }
           await saveSetting('measurement_sites', [...sites, { id, label: name }]);
-        }}>+ Track another measurement</button>
+        }}><IconPlus size={16} /> Track another measurement</button>
         <button class="btn primary block" onClick={async () => {
           await logMeasurements(today, vals);
           toast('Measurements saved ✓');
@@ -178,22 +191,26 @@ function MeasureSheet({ body, onClose }: { body: BodyData; onClose: () => void }
 
 function RecentWeighIns({ body }: { body: BodyData }) {
   const [edit, setEdit] = useState<Bodyweight | null>(null);
-  const recent = [...body.weights].reverse().slice(0, 14);
+  const [more, setMore] = useState(false);
+  const everything = [...body.weights].reverse();
+  const recent = everything.slice(0, more ? 60 : 5);
   const sleeps = body.weights.filter((w) => w.sleep_h != null && w.date > addDays(localDate(), -7));
   if (!recent.length) return null;
   return (
     <>
       <h3 class="section-title">Recent entries{sleeps.length ? ` · avg sleep ${(sleeps.reduce((a, w) => a + w.sleep_h!, 0) / sleeps.length).toFixed(1)} h` : ''}</h3>
-      <section class="card">
+      <section class="group">
         {recent.map((w) => (
-          <button key={w.id} class="rec-row" onClick={() => setEdit(w)}>
+          <button key={w.id} class="group-row rec" onClick={() => setEdit(w)}>
             <span>{new Date(`${w.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
             <span class="grow" />
             {w.sleep_h != null && <span class="muted small">{w.sleep_h} h sleep</span>}
             <span class="bold num">{w.weight_kg != null ? `${kg1(w.weight_kg)} kg` : '–'}</span>
+            <IconChevron class="row-chev" />
           </button>
         ))}
       </section>
+      {everything.length > 5 && <button class="btn ghost block sm" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show ${Math.min(everything.length, 60) - 5} more`}</button>}
       {edit && <EditWeighIn w={edit} onClose={() => setEdit(null)} />}
     </>
   );

@@ -132,12 +132,24 @@ export interface Measurement extends Base {
   value_cm: number;
 }
 
+export type Pose = 'front' | 'side' | 'back';
+export const POSES: Pose[] = ['front', 'side', 'back'];
+
 export interface Photo extends Base {
   date: string;
-  pose: 'front' | 'side' | 'back';
+  pose: Pose;
+  /** The backup copy in your Google Drive folder (null until uploaded). */
   drive_file_id: string | null;
   width: number;
   height: number;
+}
+
+/** Local-only: the image itself (JPEG bytes). Kept as ArrayBuffers, which iOS stores reliably. */
+export interface PhotoBlob {
+  id: string; // same as the photo id
+  full: ArrayBuffer;
+  thumb: ArrayBuffer;
+  mime: string;
 }
 
 export interface Food extends Base {

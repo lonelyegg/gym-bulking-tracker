@@ -2,15 +2,15 @@
 
 A personal, free, phone-first workout and bulking tracker. It's an installable web app (PWA) that works offline and keeps your data on your phone, with optional backup to your own Google Sheet.
 
-**Status: Phase 4 + StrongLifts 5×5 program, weekly split schedules, calorie estimate.**
+**Status: Phase 5 (progress photos). All planned phases done.**
 
 | Phase | What | Status |
 |---|---|---|
 | 1 | Templates, workout logging, rest timer, local storage, install + offline | ✅ |
 | 2 | Google Sheets sync via Apps Script, JSON export/import | ✅ |
 | 3 | Dashboard: icon calendar, streak, PRs, e1RM charts, rest stats | ✅ |
-| 4 | Bodyweight, measurements, food log (with meal start/finish times), bulk check | ✅ this release |
-| 5 | Progress photos | |
+| 4 | Bodyweight, measurements, food log (with meal start/finish times), bulk check | ✅ |
+| 5 | Progress photos | ✅ this release |
 
 ---
 
@@ -40,6 +40,22 @@ Home, top to bottom:
    - **Rest.** Average working rest (between sets of the same exercise) and how it compares with the period before, one column per session, plus per-exercise averages.
 
 **History** has the same calendar, full size, with the month's totals and every session in that month.
+
+## Progress photos (Phase 5)
+
+Body tab → **Progress photos** (also a card on Home).
+
+- **Take a set**: front, side and back, every 4 weeks (the app shows when the next set is due). The in-app camera shows a **faded overlay of your last photo of that pose** so you can match position and distance, with a self-timer (off / 3 s / 10 s) and front/back camera switch. **From library** works too.
+- Photos are cropped to 3:4 portrait and **compressed on the phone** (about 1600 px, JPEG), plus a small thumbnail. Retaking a pose the same day replaces it.
+- **Compare** any two dates side by side for a pose (default: Day 1 vs latest), with your 7-day average weight under each. Tap a photo to see it full size or delete it.
+- **Backup**: with Google Sheets sync connected, each photo is uploaded to a **“Gym Bulking Tracker photos” folder in your Google Drive** (once; retries never duplicate). Deleting a photo moves its Drive copy to the Drive bin. On a new phone, photos download from Drive when you view them.
+- Photos are never shared. The JSON backup file includes the photo list but not the images (those are in Drive).
+- **Needs the updated Apps Script** (below). Until then, everything else syncs and Settings/Photos tell you photos aren't backed up yet.
+
+### Updating the Apps Script for photos
+1. Open your sheet → **Extensions → Apps Script**, replace all of `Code.gs` with the latest [`apps-script/Code.gs`](apps-script/Code.gs), and **Save**.
+2. Run **`setup`** once (▶ Run). Google asks for permission again, this time for **Drive** (to create and use the photos folder only). Approve it. Your token stays the same.
+3. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy** (keeps the same URL).
 
 ## StrongLifts 5×5 program
 
@@ -188,6 +204,9 @@ src/
   lib/program.ts      5×5 rules: replay, next session, warm-ups, plates, schedule
   state/program.ts    starting 5×5 sessions, program settings
   screens/Program.tsx the program's screen
+  screens/Photos.tsx  progress photos: capture with overlay, compare, timeline
+  sync/photos.ts      photo upload/download to the Drive folder
+  lib/image.ts        crop/compress, base64
   state/food.ts       meals, food logs, saved meals, copy day
   state/body.ts       weigh-ins, sleep, measurements
   components/BodyMap  front/back body figure (bodyPaths.ts holds the shapes)

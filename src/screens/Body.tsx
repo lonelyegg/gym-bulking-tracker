@@ -9,6 +9,7 @@ import { logMeasurements, logWeight, useBody, weighIns, type BodyData } from '..
 import { WeightChart } from '../components/charts';
 import { IconScale, IconTrend } from '../components/icons';
 import { BulkCheckView } from '../components/nutrition';
+import { PhotoCompareCard } from './Photos';
 import { confirmSheet, PageTitle, promptSheet, Section, Segmented, Sheet, Stepper, toast } from '../components/ui';
 
 const kg1 = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
@@ -24,6 +25,7 @@ export function BodyScreen() {
       <Section title="Bulk check" icon={<IconTrend size={16} />} tone="var(--accent)"><BulkCheckView /></Section>
       <WeightTrend body={body} />
       <MeasurementsCard body={body} full />
+      <PhotoCompareCard />
       <RecentWeighIns body={body} />
       <div class="bottom-space" />
     </div>

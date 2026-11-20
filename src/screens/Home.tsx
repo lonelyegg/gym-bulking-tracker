@@ -24,6 +24,7 @@ import { go, PageTitle, Section, Segmented } from '../components/ui';
 import { isConfigured } from '../sync/sync';
 import { SyncChip } from './SyncSettings';
 import { MeasurementsCard, WeighInCard, weightSeries } from './Body';
+import { PhotoCompareCard } from './Photos';
 import { BulkCheckView, FoodBars, useBulkCheck } from '../components/nutrition';
 import { WeightChart } from '../components/charts';
 import { useBody } from '../state/body';
@@ -82,6 +83,7 @@ export function HomeScreen() {
       {data && <Trends data={data} />}
       <BodyweightCard />
       <HomeMeasurements />
+      <PhotoCompareCard />
       <div class="bottom-space" />
     </div>
   );

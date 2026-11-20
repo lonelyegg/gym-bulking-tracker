@@ -9,6 +9,8 @@ import { db, getLocal, onLocalChange, outboxEntry, setLocal } from '../db/db';
 import { ENTITIES, type EntityName, type OutboxEntry } from '../db/schema';
 import { loadSettings } from '../state/settings';
 import { mergeRecords } from './merge';
+import { fetchPhoto, syncPhotos } from './photos';
+import { setRemotePhotoFetch } from '../state/photos';
 
 // ---------- Config + status ----------
 
@@ -27,6 +29,9 @@ export class SyncError extends Error {
     super(message);
   }
 }
+
+// Images that aren't on this phone yet are fetched from Drive when you view them.
+setRemotePhotoFetch((photo) => (isConfigured() ? fetchPhoto(syncConfig.value, photo) : Promise.resolve(null)));
 
 export async function loadSyncConfig() {
   const cfg = await getLocal<SyncConfig>('sync_config', { url: '', token: '', auto: true });
@@ -56,7 +61,7 @@ interface ApiReply { ok: boolean; error?: string; server_time: string; [k: strin
 
 export async function callApi(
   cfg: { url: string; token: string },
-  action: 'ping' | 'push' | 'pull',
+  action: 'ping' | 'push' | 'pull' | 'photo_upload' | 'photo_get' | 'photo_delete',
   payload: object = {},
 ): Promise<ApiReply> {
   const ctl = new AbortController();
@@ -197,8 +202,11 @@ async function doSync(opts: { pull?: boolean; full?: boolean }): Promise<SyncRes
   if (!isConfigured()) return { ok: false, pushed: 0, pulled: 0, error: 'Sync isn’t set up.' };
   const cfg = syncConfig.value;
   try {
-    const pushed = await pushPending(cfg);
+    let pushed = await pushPending(cfg);
     const pulled = pull ? await pullChanges(cfg, full) : 0;
+    // Photos: upload new ones to Drive, then send their Drive ids.
+    const photos = await syncPhotos(cfg);
+    if (photos.uploaded || photos.trashed) pushed += await pushPending(cfg);
     failures = 0;
     nextAllowedAt = 0;
     if (pull || pushed) {

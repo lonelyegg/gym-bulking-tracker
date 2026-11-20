@@ -1,7 +1,7 @@
 import Dexie, { liveQuery, type Table } from 'dexie';
 import { useEffect, useState } from 'preact/hooks';
 import type {
-  Base, EntityMap, EntityName, LocalKV, OutboxEntry,
+  Base, EntityMap, EntityName, LocalKV, OutboxEntry, PhotoBlob,
 } from './schema';
 
 export class GymDB extends Dexie {
@@ -22,6 +22,8 @@ export class GymDB extends Dexie {
   settings!: Table<EntityMap['settings'], string>;
   outbox!: Table<OutboxEntry, string>;
   local!: Table<LocalKV, string>;
+  /** Local-only image data for progress photos (the Drive copy is the backup). */
+  photo_blobs!: Table<PhotoBlob, string>;
 
   constructor(name = 'gym-bulking-tracker') {
     super(name);
@@ -44,6 +46,8 @@ export class GymDB extends Dexie {
       outbox: 'key',
       local: 'key',
     });
+    // v2: progress photo images, stored on this phone only.
+    this.version(2).stores({ photo_blobs: 'id' });
   }
 
   table_<E extends EntityName>(name: E): Table<EntityMap[E], string> {

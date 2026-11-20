@@ -282,7 +282,7 @@ describe('apps script itself', () => {
     expect(server.call('pull', {}, 'wrong').error).toBe('unauthorized');
     expect(server.call('explode').error).toBe('unknown action');
     expect(JSON.parse(server.post('not json')).ok).toBe(false);
-    expect(server.call('ping').api_version).toBe(2);
+    expect(server.call('ping').api_version).toBe(3);
   });
 
   it('keeps columns it does not know about when a row is updated', async () => {
@@ -363,5 +363,74 @@ describe('backup', () => {
 
   it('names the file by local date', () => {
     expect(backupFileName(new Date(2026, 10, 19))).toBe('gym-bulking-tracker-2026-11-19.json');
+  });
+});
+
+import { savePhoto } from '../src/state/photos';
+import { fetchPhoto, photoNote } from '../src/sync/photos';
+
+describe('progress photo backup', () => {
+  const jpeg = (n: number) => new Uint8Array([0xff, 0xd8, n, n, n, 0xff, 0xd9]).buffer;
+  const shot = (pose: 'front' | 'side' | 'back', n: number) => ({ pose, full: jpeg(n), thumb: jpeg(n + 1), width: 1200, height: 1600, mime: 'image/jpeg' });
+
+  it('uploads new photos to the Drive folder once, then syncs their Drive ids', async () => {
+    const p1 = await savePhoto('2026-11-20', shot('front', 1));
+    await savePhoto('2026-11-20', shot('side', 2));
+    expect((await syncNow()).ok).toBe(true);
+    const live = server.drive.files;
+    expect(live.size).toBe(2);
+    expect([...live.values()].some((f) => f.name.includes(p1.id))).toBe(true);
+    const local = (await db.photos.get(p1.id))!;
+    expect(local.drive_file_id).toMatch(/^file/);
+    expect(server.sheet('photos')!.rows().find((r) => r.id === p1.id)!.drive_file_id).toBe(local.drive_file_id);
+    // Retrying (e.g. after a timeout) doesn't duplicate
+    await db.photos.update(p1.id, { drive_file_id: null });
+    await syncNow();
+    expect(server.drive.files.size).toBe(2);
+  });
+
+  it('a new phone gets photo records from the Sheet and images from Drive', async () => {
+    const p = await savePhoto('2026-11-20', shot('back', 7));
+    await syncNow();
+    await wipePhone();
+    await syncNow();
+    const restored = (await db.photos.get(p.id))!;
+    expect(restored.drive_file_id).toBeTruthy();
+    expect(await db.photo_blobs.get(p.id)).toBeUndefined(); // fetched lazily when viewed
+    const buf = await fetchPhoto(syncConfig.value, restored);
+    expect(new Uint8Array(buf!)).toEqual(new Uint8Array(jpeg(7)));
+  });
+
+  it('retaking a pose the same day replaces it; deleted photos go to the Drive bin', async () => {
+    await savePhoto('2026-11-20', shot('front', 1));
+    await syncNow();
+    await savePhoto('2026-11-20', shot('front', 3));
+    await syncNow();
+    const files = [...server.drive.files.values()];
+    expect(files.filter((f) => !f.trashed)).toHaveLength(1);
+    expect(files.filter((f) => f.trashed)).toHaveLength(1);
+    expect((await db.photos.toArray()).filter((p) => !p.deleted)).toHaveLength(1);
+  });
+
+  it('an older script without photo support: data still syncs, with a note to update', async () => {
+    const old = createFakeScript(TOKEN);
+    vi.stubGlobal('fetch', async (_u: string, init: { body: string }) => {
+      const body = JSON.parse(init.body);
+      if (String(body.action).startsWith('photo_')) return new Response(JSON.stringify({ ok: false, error: 'unknown action' }));
+      return new Response(old.post(init.body));
+    });
+    await savePhoto('2026-11-20', shot('front', 1));
+    const r = await syncNow();
+    expect(r.ok).toBe(true);
+    expect(old.sheet('photos')!.rows()).toHaveLength(1);
+    expect(photoNote.value).toMatch(/Apps Script/);
+  });
+
+  it('the script only serves files from its own photo folder', async () => {
+    server.call('ping');
+    const other = server.drive.DriveApp.createFolder('Private').createFile({ bytes: [1, 2, 3], mime: 'text/plain', name: 'secret.txt' });
+    const res = server.call('photo_get', { file_id: other.getId() });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/not a progress photo/);
   });
 });

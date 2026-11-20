@@ -29,7 +29,8 @@ var JSON_FIELDS = {
 };
 
 var SYNCED_AT = '_synced_at';
-var API_VERSION = 2; // the app checks this, so it can tell you when the script is out of date
+var API_VERSION = 3; // the app checks this, so it can tell you when the script is out of date (3 = progress photos)
+var PHOTO_FOLDER_NAME = 'Gym Bulking Tracker photos';
 
 /** Run this once from the editor (Run ▶ setup). It creates the tabs and logs your token. */
 function setup() {
@@ -41,6 +42,7 @@ function setup() {
   }
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   ENTITIES.forEach(function (name) { getSheet_(ss, name); });
+  photoFolder_(); // creates the Drive folder for progress photos (and asks for Drive permission)
   var first = ss.getSheetByName('Sheet1');
   if (first && ss.getSheets().length > 1 && first.getLastRow() === 0) ss.deleteSheet(first);
   Logger.log('Your API token (paste it into the app → Settings → Sync):\n\n' + token);
@@ -68,6 +70,9 @@ function doPost(e) {
       if (body.action === 'ping') return json_({ ok: true, api_version: API_VERSION, server_time: new Date().toISOString() });
       if (body.action === 'push') return json_(push_(body.changes || {}));
       if (body.action === 'pull') return json_(pull_(body.since || ''));
+      if (body.action === 'photo_upload') return json_(photoUpload_(body));
+      if (body.action === 'photo_get') return json_(photoGet_(body));
+      if (body.action === 'photo_delete') return json_(photoDelete_(body));
       return json_({ ok: false, error: 'unknown action' });
     } finally {
       lock.releaseLock();
@@ -197,6 +202,52 @@ function pull_(since) {
 }
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Progress photos: stored in one Drive folder. Only files in that folder can be read or deleted.
+
+function photoFolder_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('PHOTO_FOLDER_ID');
+  if (id) {
+    try {
+      var existing = DriveApp.getFolderById(id);
+      if (!existing.isTrashed()) return existing;
+    } catch (e) { /* deleted: make a new one */ }
+  }
+  var folder = DriveApp.createFolder(PHOTO_FOLDER_NAME);
+  props.setProperty('PHOTO_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function photoInFolder_(fileId) {
+  var folder = photoFolder_();
+  var file = DriveApp.getFileById(String(fileId));
+  var parents = file.getParents();
+  while (parents.hasNext()) if (parents.next().getId() === folder.getId()) return file;
+  throw new Error('not a progress photo');
+}
+
+/** Idempotent: the file name contains the photo's id, so a retry returns the same file. */
+function photoUpload_(b) {
+  if (!b.id || !b.data) throw new Error('missing photo');
+  var folder = photoFolder_();
+  var name = String(b.name || b.id);
+  var found = folder.getFilesByName(name);
+  if (found.hasNext()) return { ok: true, file_id: found.next().getId(), existed: true };
+  var blob = Utilities.newBlob(Utilities.base64Decode(b.data), b.mime || 'image/jpeg', name);
+  return { ok: true, file_id: folder.createFile(blob).getId() };
+}
+
+function photoGet_(b) {
+  var file = photoInFolder_(b.file_id);
+  return { ok: true, mime: file.getMimeType(), data: Utilities.base64Encode(file.getBlob().getBytes()) };
+}
+
+function photoDelete_(b) {
+  try { photoInFolder_(b.file_id).setTrashed(true); } catch (e) { /* already gone */ }
+  return { ok: true };
+}
 
 function getSheet_(ss, name) {
   var sheet = ss.getSheetByName(name);

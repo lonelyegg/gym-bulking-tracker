@@ -50,8 +50,43 @@ export class FakeSheet {
   }
 }
 
+/** In-memory Drive: folders and files, enough for the photo actions. */
+export function createFakeDrive() {
+  let n = 0;
+  const files = new Map<string, { id: string; name: string; bytes: number[]; mime: string; parent: string; trashed: boolean }>();
+  const folders = new Map<string, { id: string; name: string; trashed: boolean }>();
+  const iter = <T>(list: T[]) => { let i = 0; return { hasNext: () => i < list.length, next: () => list[i++] }; };
+  const folderObj = (f: { id: string; name: string; trashed: boolean }) => ({
+    getId: () => f.id,
+    isTrashed: () => f.trashed,
+    getFilesByName: (name: string) => iter([...files.values()].filter((x) => x.parent === f.id && x.name === name && !x.trashed).map(fileObj)),
+    createFile: (blob: { bytes: number[]; mime: string; name: string }) => {
+      const id = `file${++n}`;
+      files.set(id, { id, name: blob.name, bytes: blob.bytes, mime: blob.mime, parent: f.id, trashed: false });
+      return fileObj(files.get(id)!);
+    },
+  });
+  const fileObj = (x: { id: string; name: string; bytes: number[]; mime: string; parent: string; trashed: boolean }) => ({
+    getId: () => x.id,
+    getMimeType: () => x.mime,
+    getBlob: () => ({ getBytes: () => x.bytes }),
+    setTrashed: (t: boolean) => { x.trashed = t; },
+    getParents: () => iter([folderObj(folders.get(x.parent)!)]),
+  });
+  return {
+    files,
+    folders,
+    DriveApp: {
+      createFolder: (name: string) => { const id = `folder${++n}`; folders.set(id, { id, name, trashed: false }); return folderObj(folders.get(id)!); },
+      getFolderById: (id: string) => { const f = folders.get(id); if (!f) throw new Error('no folder'); return folderObj(f); },
+      getFileById: (id: string) => { const f = files.get(id); if (!f) throw new Error('no file'); return fileObj(f); },
+    },
+  };
+}
+
 export function createFakeScript(token = 'secret-token') {
   const sheets = new Map<string, FakeSheet>();
+  const drive = createFakeDrive();
   const props = new Map<string, string>([['API_TOKEN', token]]);
   const spreadsheet = {
     getSheetByName: (n: string) => sheets.get(n) ?? null,
@@ -75,7 +110,11 @@ export function createFakeScript(token = 'secret-token') {
     Utilities: {
       getUuid: () => crypto.randomUUID(),
       formatDate: (d: Date) => d.toISOString().slice(0, 10),
+      base64Decode: (b64: string) => [...Buffer.from(b64, 'base64')],
+      base64Encode: (bytes: number[]) => Buffer.from(bytes).toString('base64'),
+      newBlob: (bytes: number[], mime: string, name: string) => ({ bytes, mime, name }),
     },
+    DriveApp: drive.DriveApp,
     Logger: { log() {} },
   });
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../apps-script/Code.gs'), 'utf8'), ctx);
@@ -83,6 +122,7 @@ export function createFakeScript(token = 'secret-token') {
 
   return {
     sheets,
+    drive,
     sheet: (name: string) => sheets.get(name),
     /** Handle a POST body like the web app would. */
     post(body: string): string {

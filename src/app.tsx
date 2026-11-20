@@ -9,6 +9,7 @@ import { IconCalendar, IconDumbbell, IconFood, IconHome, IconScale } from './com
 import { FoodScreen, FoodsScreen } from './screens/Food';
 import { BodyScreen } from './screens/Body';
 import { ProgramScreen } from './screens/Program';
+import { CaptureScreen, PhotosScreen } from './screens/Photos';
 import {
   DayTypeEditorScreen, ExerciseEditScreen, ExercisesScreen, PlanScreen, SplitEditorScreen,
 } from './screens/Plan';
@@ -35,6 +36,7 @@ function match(path: string) {
   if (a === 'food') return { tab: 'food', el: b === 'foods' ? <FoodsScreen /> : <FoodScreen /> };
   if (a === 'body') return { tab: 'body', el: <BodyScreen /> };
   if (a === 'program') return { tab: 'plan', el: <ProgramScreen /> };
+  if (a === 'photos') return b === 'capture' ? { tab: 'capture', el: <CaptureScreen /> } : { tab: 'body', el: <PhotosScreen /> };
   return { tab: 'home', el: <HomeScreen /> };
 }
 
@@ -49,7 +51,8 @@ const TABS = [
 export function App() {
   const { tab, el } = match(route.value);
   const active = useLive(async () => (await getActiveWorkout()) ?? null, []);
-  const inWorkout = tab === 'workout';
+  // Full-screen pages: no tab bar.
+  const inWorkout = tab === 'workout' || tab === 'capture';
   return (
     <>
       <main class={inWorkout ? 'in-workout' : ''}>{el}</main>

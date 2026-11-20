@@ -3,7 +3,7 @@ import {
   canUseGrams, canUseServings, dayTotals, defaultAmount, fromRestaurant, groupByRestaurant, matchesSearch, mealNameFor, nutrientsFor,
   proteinTarget, rankFoods, restaurants,
 } from '../src/lib/nutrition';
-import { bulkCheck, changeIsGood, DEFAULT_SITES, measurementTable, movingAverage, siteId, weekAverage } from '../src/lib/body';
+import { activityFactor, bulkCheck, changeIsGood, DEFAULT_SITES, estimateCalories, measurementTable, movingAverage, siteId, weekAverage } from '../src/lib/body';
 import { addDays } from '../src/lib/stats';
 
 const rice = { basis: 'per_100g' as const, serving_g: null, kcal: 130, protein_g: 2.7, carbs_g: 28, fat_g: 0.3 };
@@ -166,5 +166,24 @@ describe('measurements', () => {
     expect(changeIsGood(arm.site, 1)).toBe(true);
     expect(rows.find((r) => r.site.id === 'thigh')!.latest).toBeNull();
     expect(siteId(' Neck (relaxed) ')).toBe('neck_relaxed');
+  });
+});
+
+describe('calorie estimate', () => {
+  it('Mifflin–St Jeor × activity, + 250 for a lean bulk', () => {
+    // 157 cm, 52 kg, 25 years, 4 sessions/week
+    const m = estimateCalories({ weightKg: 52, heightCm: 157, age: 25, sex: 'male', sessionsPerWeek: 4, physicalJob: false });
+    expect(m.bmr).toBe(1381);
+    expect(m.factor).toBe(1.55);
+    expect(m.maintenance).toBe(2140);
+    expect(m.bulk).toBe(2400);
+    const f = estimateCalories({ weightKg: 52, heightCm: 157, age: 25, sex: 'female', sessionsPerWeek: 4, physicalJob: false });
+    expect(f.bmr).toBe(1215);
+    expect(f.maintenance).toBe(1880);
+    expect(f.bulk).toBe(2150);
+  });
+  it('activity factor by sessions, physical job adds 0.15', () => {
+    expect([0, 2, 3, 4, 6].map((n) => activityFactor(n, false))).toEqual([1.2, 1.375, 1.375, 1.55, 1.725]);
+    expect(activityFactor(3, true)).toBe(1.525);
   });
 });

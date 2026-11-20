@@ -268,10 +268,9 @@ function QuickAddForm(props: {
         onInc={(c) => setKcal(Math.min(5000, (c ?? 0) + 50))} onDec={(c) => setKcal(Math.max(0, (c ?? 0) - 50))} />
       <label>Protein</label>
       <Stepper value={protein} step={5} min={0} max={500} decimals unit="g" placeholder="0" onChange={setProtein} />
-      <label>Carbs and fat (optional)</label>
-      <div class="row gap">
-        <Stepper value={carbs} step={5} min={0} max={500} decimals unit="C" placeholder="–" onChange={setCarbs} />
-        <Stepper value={fat} step={5} min={0} max={500} decimals unit="F" placeholder="–" onChange={setFat} />
+      <div class="pair">
+        <div><span class="pair-label">Carbs (optional)</span><Stepper value={carbs} step={5} min={0} max={500} decimals unit="g" placeholder="–" onChange={setCarbs} /></div>
+        <div><span class="pair-label">Fat (optional)</span><Stepper value={fat} step={5} min={0} max={500} decimals unit="g" placeholder="–" onChange={setFat} /></div>
       </div>
       {props.allowSave && <Toggle label="Also save to My foods" hint="Turn on if you might have it again." checked={save} onChange={setSave} />}
       <div class="row gap mt">
@@ -493,19 +492,17 @@ export function FoodForm(props: { existing?: Food; initialName?: string; initial
       <label>Nutrition is</label>
       <Segmented label="Nutrition basis" value={basis === 'per_100g' ? 'Per 100 g' : 'Per serving'} options={['Per 100 g', 'Per serving']}
         onChange={(v) => setBasis(v === 'Per 100 g' ? 'per_100g' : 'per_serving')} />
-      <label>Serving {basis === 'per_100g' ? '(optional, lets you log by serving)' : ''}</label>
-      <div class="row gap">
-        <input class="input" style={{ flex: 1.2 }} value={servingLabel} placeholder={basis === 'per_100g' ? 'e.g. 1 bowl' : 'e.g. 1 scoop'} onInput={(ev) => setServingLabel((ev.currentTarget as HTMLInputElement).value)} />
-        <div style={{ flex: 1 }}><Stepper value={servingG} step={5} min={0} max={2000} decimals unit="g" placeholder="g" onChange={setServingG} /></div>
-      </div>
+      <label>Serving name {basis === 'per_100g' ? '(optional, lets you log by serving)' : ''}</label>
+      <input class="input" value={servingLabel} placeholder={basis === 'per_100g' ? 'e.g. 1 bowl' : 'e.g. 1 scoop'} onInput={(ev) => setServingLabel((ev.currentTarget as HTMLInputElement).value)} />
+      <label>Serving size in grams (optional)</label>
+      <Stepper value={servingG} step={5} min={0} max={2000} decimals unit="g" placeholder="–" onChange={setServingG} />
       <label>Calories {per}</label>
       <Stepper value={kcal} step={10} min={0} max={5000} unit="kcal" placeholder="0" onChange={setKcal} />
       <label>Protein {per}</label>
       <Stepper value={protein} step={1} min={0} max={500} decimals unit="g" placeholder="0" onChange={setProtein} />
-      <label>Carbs and fat {per} (optional)</label>
-      <div class="row gap">
-        <Stepper value={carbs} step={1} min={0} max={500} decimals unit="C" placeholder="–" onChange={setCarbs} />
-        <Stepper value={fat} step={1} min={0} max={500} decimals unit="F" placeholder="–" onChange={setFat} />
+      <div class="pair">
+        <div><span class="pair-label">Carbs {per} (optional)</span><Stepper value={carbs} step={1} min={0} max={500} decimals unit="g" placeholder="–" onChange={setCarbs} /></div>
+        <div><span class="pair-label">Fat {per} (optional)</span><Stepper value={fat} step={1} min={0} max={500} decimals unit="g" placeholder="–" onChange={setFat} /></div>
       </div>
       <div class="row gap mt">
         {e && <button class="btn danger-outline" onClick={async () => {

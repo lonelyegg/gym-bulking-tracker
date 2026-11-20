@@ -108,8 +108,46 @@ export function weekStart(d: Date = new Date()): string {
 
 export type NextUp =
   | { kind: 'empty' } // split has no day types
-  | { kind: 'workout'; index: number; dayTypeId: string; trainedToday: boolean }
-  | { kind: 'rest'; index: number; nextIndex: number; nextDayTypeId: string };
+  | { kind: 'workout'; index: number; dayTypeId: string; trainedToday: boolean; date?: string }
+  | { kind: 'rest'; index: number; nextIndex: number; nextDayTypeId: string; date?: string };
+
+/** How a split is scheduled: fixed weekdays, or a cycle that continues from your last workout. */
+export function scheduleMode(split: Pick<Split, 'rotation' | 'schedule'>): 'weekly' | 'cycle' {
+  return split.schedule ?? (split.rotation.length === 7 ? 'weekly' : 'cycle');
+}
+
+/** Monday = 0 … Sunday = 6 for a local date. */
+export function weekdayIndex(date: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  return (new Date(y, m - 1, d).getDay() + 6) % 7;
+}
+
+export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function plusDays(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return localDate(new Date(y, m - 1, d + n));
+}
+
+/**
+ * Weekly schedule: slot i is weekday i. Today's slot is due unless you've trained today;
+ * otherwise the next weekday with a workout. Missed days are not carried over.
+ */
+export function nextWeekly(split: Pick<Split, 'rotation'>, today: string, trainedToday: boolean): NextUp {
+  const rot = split.rotation;
+  const wd = weekdayIndex(today);
+  if (!trainedToday && rot[wd] && rot[wd] !== REST) return { kind: 'workout', index: wd, dayTypeId: rot[wd], trainedToday: false, date: today };
+  for (let k = 1; k <= 7; k++) {
+    const j = (wd + k) % 7;
+    if (rot[j] && rot[j] !== REST) {
+      const date = plusDays(today, k);
+      return trainedToday
+        ? { kind: 'workout', index: j, dayTypeId: rot[j], trainedToday: true, date }
+        : { kind: 'rest', index: wd, nextIndex: j, nextDayTypeId: rot[j], date };
+    }
+  }
+  return { kind: 'empty' };
+}
 
 /**
  * Next day in the rotation, based on the last finished workout that counted toward it.

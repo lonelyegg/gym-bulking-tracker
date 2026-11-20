@@ -2,7 +2,7 @@
 
 A personal, free, phone-first workout and bulking tracker. It's an installable web app (PWA) that works offline and keeps your data on your phone, with optional backup to your own Google Sheet.
 
-**Status: Phase 4 (bodyweight, measurements, food log, bulk check).**
+**Status: Phase 4 + StrongLifts 5×5 program, weekly split schedules, calorie estimate.**
 
 | Phase | What | Status |
 |---|---|---|
@@ -40,6 +40,29 @@ Home, top to bottom:
    - **Rest.** Average working rest (between sets of the same exercise) and how it compares with the period before, one column per session, plus per-exercise averages.
 
 **History** has the same calendar, full size, with the month's totals and every session in that month.
+
+## StrongLifts 5×5 program
+
+Plan → **Programs → StrongLifts 5×5**. A program is a plan that does the thinking for you; when it's active it replaces your split on Home and the calendar (your splits stay saved).
+
+- **The program** (as described at lift5x5.app): Workout A = Squat 5×5, Bench 5×5, Barbell Row 5×5; Workout B = Squat 5×5, Overhead Press 5×5, Deadlift 1×5. A and B alternate every session on your training days (default Mon/Wed/Fri, so the week goes A B A, then B A B).
+- **Starting weights**: the guide's beginner weights (empty bar for squat, bench and press, 30 kg row, 40 kg deadlift), editable before you start, with your past best est. 1RM shown for reference.
+- **Progression**: all 5×5 (deadlift 1×5) at the target weight → +2.5 kg next time (+5 kg deadlift). A miss → same weight. Three misses in a row at the same weight → that lift drops 10%, rounded down to a weight your plates can make. More than a week off → everything 10% lighter.
+- **In the workout**: weights, warm-up sets (empty bar, ~65% × 5, ~85% × 3) and **plates per side** are filled in for you; reps default to 5, so a clean set is one tap. Rest is 1:30 after warm-ups, 3:00 after a work set ("felt easy" → 1:30), 5:00 after a missed set.
+- **After the workout**: the summary shows each lift's result and next weight.
+- **Program screen**: next workout, each lift's status (moving up / missed 1 of 3 / deloaded), change a weight from now on, training days, increments (e.g. +1.25 kg press with microplates), bar weight, plates, and session history.
+- Weights are recalculated from your logged 5×5 sessions every time, so editing or deleting a session, syncing another phone, or logging a missed session afterwards all stay consistent. 5×5 sessions are normal workouts, so History, the calendar, PRs, strength charts, muscles and exercise pages include them.
+
+## Split schedules: fixed weekdays or a rotating cycle
+
+In a split's editor, **Schedule** is either:
+- **Fixed weekdays**: 7 slots, Monday to Sunday; each weekday always has the same workout. The calendar and Today follow the weekday, so switching to a Mon/Wed/Fri split on a Friday shows Monday as the next workout. A missed day isn't moved.
+- **Rotating cycle**: entries repeat in order from your last workout, whatever the weekday (e.g. Push, Pull, Legs, Rest).
+Splits with exactly 7 entries (including the Upper/Lower, Full Body and Bro presets) are weekly by default.
+
+## Calorie estimate
+
+Food → Targets (or Settings): enter height, year born and sex. It shows maintenance (Mifflin–St Jeor × an activity factor from your weekly sessions, +0.15 for a physical job) and a lean-bulk target (+250 kcal) with a one-tap **Use**. It's a starting point; the bulk check corrects it from your real weight trend.
 
 ## Food, body and the bulk check (Phase 4)
 
@@ -161,7 +184,10 @@ src/
                       weekly sets per muscle, planned-day projection, per-exercise summary
   lib/muscles.ts      muscle list, weights, legacy upgrade, colour scale
   lib/nutrition.ts    food maths: amounts, totals, meal names, recent/frequent ordering
-  lib/body.ts         moving average, bulk check, measurement table
+  lib/body.ts         moving average, bulk check, measurement table, calorie estimate
+  lib/program.ts      5×5 rules: replay, next session, warm-ups, plates, schedule
+  state/program.ts    starting 5×5 sessions, program settings
+  screens/Program.tsx the program's screen
   state/food.ts       meals, food logs, saved meals, copy day
   state/body.ts       weigh-ins, sleep, measurements
   components/BodyMap  front/back body figure (bodyPaths.ts holds the shapes)

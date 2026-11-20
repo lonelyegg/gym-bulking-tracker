@@ -82,6 +82,17 @@ export function adjustRest(deltaSeconds: number) {
   schedule();
 }
 
+/** Change this rest's length, counted from when it started (e.g. "felt easy → 90 s"). */
+export function setRestLength(seconds: number) {
+  const t = timer.value;
+  if (!t) return;
+  const started = t.endsAt - t.duration * 1000;
+  const endsAt = started + seconds * 1000;
+  timer.value = { ...t, endsAt, duration: seconds, fired: endsAt <= Date.now() };
+  persist();
+  schedule();
+}
+
 export function stopRest() {
   timer.value = null;
   justFired.value = false;

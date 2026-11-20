@@ -1,6 +1,7 @@
 // Pure dashboard maths (no database, no DOM) so every number on the dashboard is unit-tested.
 import type { Exercise, PrType, Split, Workout, WorkoutSet } from '../db/schema';
-import { avgRest, epley, localDate, nextInRotation } from './logic';
+import { avgRest, epley, localDate, nextInRotation, scheduleMode, weekdayIndex } from './logic';
+import { REST } from '../db/schema';
 import { resolveMuscles, type Muscle, type MuscleMap } from './muscles';
 
 export type W = Pick<Workout, 'id' | 'started_at' | 'ended_at' | 'day_type_id' | 'name' | 'icon' | 'color'>
@@ -324,9 +325,19 @@ export type Planned = { kind: 'workout'; dayTypeId: string; index: number } | { 
  * or a split change reshuffles the plan automatically.
  */
 export function plannedDays(
-  split: Pick<Split, 'rotation'>, last: { rotation_index: number; date: string } | null, start: string, until: string,
+  split: Pick<Split, 'rotation' | 'schedule'>, last: { rotation_index: number; date: string } | null, start: string, until: string,
 ): Map<string, Planned> {
   const out = new Map<string, Planned>();
+  if (scheduleMode(split) === 'weekly') {
+    // Fixed weekdays: each date simply gets its weekday's slot.
+    if (!split.rotation.some((r) => r !== REST)) return out;
+    for (let d = start, guard = 0; d <= until && guard < 400; d = addDays(d, 1), guard++) {
+      const i = weekdayIndex(d);
+      const id = split.rotation[i];
+      out.set(d, !id || id === REST ? { kind: 'rest' } : { kind: 'workout', dayTypeId: id, index: i });
+    }
+    return out;
+  }
   let cur = last;
   for (let d = start, guard = 0; d <= until && guard < 400; d = addDays(d, 1), guard++) {
     const r = nextInRotation(split, cur, d);

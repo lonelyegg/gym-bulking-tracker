@@ -2,6 +2,8 @@ import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
 import { db, getLocal, setLocal, useLive } from '../db/db';
 import { fmtClock, fmtDuration, fmtKg, localDate, round1 } from '../lib/logic';
+import { DAY_STYLE, LIFT_SHORT } from '../lib/program';
+import { programActive, startProgramWorkout, useProgram } from '../state/program';
 import {
   averageRest, e1rmSeries, liftOptions, muscleSets, prEvents, RANGES, restByExercise, restBySession, splitByRange,
   weeklyStreak, workoutsByDate, type Range,
@@ -126,15 +128,18 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
     );
   }
 
+  if (programActive()) return <ProgramToday />;
+
   const next = nextUp.next;
   const dt = (id?: string) => dayTypes.find((d) => d.id === id);
   const isRest = next.kind === 'rest';
   const d = next.kind === 'workout' ? dt(next.dayTypeId) : next.kind === 'rest' ? dt(next.nextDayTypeId) : undefined;
   const idx = next.kind === 'workout' ? next.index : next.kind === 'rest' ? next.nextIndex : undefined;
   const last = d && data ? [...data.workouts].reverse().find((w) => w.day_type_id === d.id) : undefined;
+  const when = next.kind !== 'empty' && next.date && next.date !== localDate() ? ` · ${fmtDay(next.date)}` : '';
   const kicker = next.kind === 'empty' ? 'No split selected'
-    : isRest ? 'Rest day · recover and eat'
-      : next.trainedToday ? 'Trained today ✓ · up next' : 'Today’s workout';
+    : isRest ? `Rest day · recover and eat`
+      : next.trainedToday ? `Trained today ✓ · up next${when}` : 'Today’s workout';
 
   return (
     <div class="today-card" style={{ '--c': d?.color ?? '#8a919e' }}>
@@ -147,6 +152,7 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
           <div class="today-icon">{isRest ? '😴' : d.icon}</div>
           <div class="grow">
             <div class="today-name">{isRest ? `Next: ${d.name}` : d.name}</div>
+            {isRest && when && <div class="muted small">{when.slice(3)}</div>}
             <div class="muted small">
               {tplCounts[d.id] ?? 0} exercises
               {last && ` · last ${fmtDay(last.started_at)}`}
@@ -161,6 +167,40 @@ function TodayCard({ data }: { data: TrainingData | undefined }) {
         {!isRest && <IconPlay />}{isRest ? 'Train anyway' : d ? `Start ${d.name}` : 'Start empty workout'}
       </button>
 
+      <TodayFood />
+      <StartSheet open={choose} onClose={() => setChoose(false)} />
+    </div>
+  );
+}
+
+/** Today card when the 5×5 program is your plan. */
+function ProgramToday() {
+  const p = useProgram();
+  const [choose, setChoose] = useState(false);
+  if (!p) return <div class="today-card placeholder" />;
+  const { next, state } = p;
+  const today = localDate();
+  const isToday = next.date === today;
+  const style = DAY_STYLE[next.day];
+  const kicker = isToday ? '5×5 · Today’s workout' : state.lastDate === today ? `Trained today ✓ · next ${fmtDay(next.date)}` : `Rest day · next ${fmtDay(next.date)}`;
+  const start = async (day: 'A' | 'B') => { await startProgramWorkout(day); go('/workout'); };
+  return (
+    <div class="today-card" style={{ '--c': style.color }}>
+      <div class="today-top">
+        <span class="today-kicker">{kicker}</span>
+        <button class="today-change" onClick={() => setChoose(true)}>Change</button>
+      </div>
+      <div class="today-main">
+        <div class="today-icon">{style.icon}</div>
+        <button class="grow left plain" onClick={() => go('/program')}>
+          <div class="today-name">Workout {next.day}</div>
+          <div class="muted small">{next.lifts.map((l) => `${LIFT_SHORT[l.lift]} ${fmtKg(l.weight)}`).join(' · ')} kg ›</div>
+        </button>
+      </div>
+      {next.afterBreak && <p class="small warn-text">Back after a week off: weights are 10% lighter today.</p>}
+      <button class={`btn block lg ${isToday ? 'primary' : ''}`} onClick={() => start(next.day)}>
+        {isToday && <IconPlay />}{isToday ? `Start Workout ${next.day}` : 'Train anyway'}
+      </button>
       <TodayFood />
       <StartSheet open={choose} onClose={() => setChoose(false)} />
     </div>

@@ -53,6 +53,12 @@ export const REST = 'rest';
 export interface Split extends Base {
   name: string;
   rotation: string[];
+  /**
+   * 'weekly': exactly 7 slots, slot 1 = Monday … slot 7 = Sunday (days are fixed).
+   * 'cycle': slots repeat in order from your last workout, whatever the weekday.
+   * Missing on older records: 7 slots → weekly, otherwise cycle.
+   */
+  schedule?: 'weekly' | 'cycle';
 }
 
 export type WorkoutStatus = 'active' | 'done';
@@ -71,6 +77,9 @@ export interface Workout extends Base {
   notes: string;
   /** 1 = logged afterwards for a past day (no timers; you set the duration when finishing). */
   backfill?: 0 | 1;
+  /** Set when the workout belongs to a program (e.g. 'sl5x5'), with its day ('A' / 'B'). */
+  program?: string | null;
+  program_day?: string | null;
 }
 
 export interface WorkoutExercise extends Base {

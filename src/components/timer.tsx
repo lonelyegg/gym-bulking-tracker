@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { db, useLive } from '../db/db';
 import { fmtClock } from '../lib/logic';
-import { adjustRest, justFired, remaining, stopRest, timer } from '../state/timer';
+import { adjustRest, justFired, remaining, setRestLength, stopRest, timer } from '../state/timer';
 import { updateSet } from '../state/workout';
 import { go, RirPicker } from './ui';
 
@@ -11,6 +11,8 @@ const compact = signal(false);
 export function TimerPanel() {
   const t = timer.value;
   const set = useLive(() => (t?.setId ? db.sets.get(t.setId) : Promise.resolve(undefined)), [t?.setId]);
+  const workout = useLive(() => (set ? db.workouts.get(set.workout_id) : Promise.resolve(undefined)), [set?.workout_id]);
+  const program = !!workout?.program;
   if (!t) return null;
   const rem = remaining.value;
   const over = rem <= 0;
@@ -30,7 +32,10 @@ export function TimerPanel() {
         <button class="btn" onClick={stopRest}>{over ? 'Dismiss' : 'Skip'}</button>
         <button class="btn" onClick={() => adjustRest(15)}>+15s</button>
       </div>}
-      {!compact.value && set && set.completed_at && !set.is_warmup && (
+      {!compact.value && program && set && set.completed_at && !set.is_warmup && t.duration === 180 && (
+        <button class="btn block sm easy-btn" onClick={() => setRestLength(90)}>That set felt easy → rest 1:30</button>
+      )}
+      {!compact.value && !program && set && set.completed_at && !set.is_warmup && (
         <div class="timer-rir">
           <span class="muted small">Reps in reserve, last set</span>
           <RirPicker value={set.rir} onChange={(rir) => updateSet(set, { rir })} />

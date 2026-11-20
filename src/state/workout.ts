@@ -4,7 +4,7 @@ import type {
   Exercise, PrType, Workout, WorkoutExercise, WorkoutSet,
 } from '../db/schema';
 import {
-  avgRest, detectPRs, epley, localDate, nextInRotation, rotationIndexFor, type NextUp, type SetLite,
+  avgRest, detectPRs, epley, localDate, nextInRotation, nextWeekly, rotationIndexFor, scheduleMode, type NextUp, type SetLite,
 } from '../lib/logic';
 import { settings } from './settings';
 import { startRest, stopRest, timer } from './timer';
@@ -76,7 +76,13 @@ export async function computeNextUp(): Promise<{ next: NextUp; splitId: string |
   const splitId = settings.value.active_split_id;
   const split = splitId ? await db.splits.get(splitId) : undefined;
   if (!alive(split)) return { next: { kind: 'empty' }, splitId: null };
-  const last = (await doneWorkouts()).find((w) => w.split_id === split.id && w.rotation_index != null);
+  const done = await doneWorkouts();
+  if (scheduleMode(split) === 'weekly') {
+    // Fixed weekdays: what's due depends on the calendar, not on what you did last.
+    const today = localDate();
+    return { next: nextWeekly(split, today, done.some((w) => localDate(w.started_at) === today)), splitId: split.id };
+  }
+  const last = done.find((w) => w.split_id === split.id && w.rotation_index != null);
   const next = nextInRotation(
     split,
     last ? { rotation_index: last.rotation_index!, date: localDate(last.started_at) } : null,
@@ -333,12 +339,16 @@ export async function completeSet(
     const remainingHere = pending(set.workout_exercise_id).length;
     const nextWe = wes.find((w) => w.id !== set.workout_exercise_id && !w.skipped && pending(w.id).length > 0 && w.position > (we?.position ?? -1))
       ?? wes.find((w) => w.id !== set.workout_exercise_id && !w.skipped && pending(w.id).length > 0);
+    // 5×5 program rest: 90 s after a warm-up, 3 min after a work set, 5 min after a missed set.
+    const programRest = workout.program
+      ? (set.is_warmup ? 90 : values.reps < (we?.rep_max ?? 5) ? 300 : 180)
+      : null;
     if (we && remainingHere > 0) {
       const nextSet = pending(we.id).sort((a, b) => a.set_number - b.set_number)[0];
-      const secs = set.is_warmup ? Math.min(WARMUP_REST_S, we.rest_s) : we.rest_s;
+      const secs = programRest ?? (set.is_warmup ? Math.min(WARMUP_REST_S, we.rest_s) : we.rest_s);
       startRest(secs, { label: `${exNames.get(we.exercise_id) ?? ''} · set ${nextSet.set_number}`, workoutId: set.workout_id, setId: set.id });
     } else if (we && nextWe) {
-      const secs = we.transition_rest_s ?? settings.value.transition_rest_s;
+      const secs = programRest ?? we.transition_rest_s ?? settings.value.transition_rest_s;
       startRest(secs, { label: `Next: ${exNames.get(nextWe.exercise_id) ?? ''}`, workoutId: set.workout_id, setId: set.id });
     } else {
       stopRest();

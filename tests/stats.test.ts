@@ -215,3 +215,36 @@ describe('exerciseSummary', () => {
     expect(r.rest.map((x) => x.value)).toEqual([120, 150]);
   });
 });
+
+import { nextWeekly, scheduleMode, weekdayIndex } from '../src/lib/logic';
+
+describe('weekly split schedules', () => {
+  // Full Body ×3 arranged Mon / Wed / Fri (slot 1 = Monday).
+  const fb = { rotation: ['A', 'rest', 'B', 'rest', 'C', 'rest', 'rest'] };
+  it('7-slot splits are weekly unless set otherwise', () => {
+    expect(scheduleMode(fb)).toBe('weekly');
+    expect(scheduleMode({ rotation: ['p', 'p', 'l', 'rest'] })).toBe('cycle');
+    expect(scheduleMode({ ...fb, schedule: 'cycle' })).toBe('cycle');
+    expect([weekdayIndex('2026-11-23'), weekdayIndex('2026-11-22')]).toEqual([0, 6]); // Mon, Sun
+  });
+  it('switching on a Friday evening: the plan waits for Monday instead of starting tomorrow', () => {
+    // Fri 20 Nov 2026, already trained today (PPL). Next: Monday = A.
+    const n = nextWeekly(fb, '2026-11-20', true);
+    expect(n).toMatchObject({ kind: 'workout', dayTypeId: 'A', date: '2026-11-23', trainedToday: true });
+    const p = plannedDays(fb, null, '2026-11-21', '2026-11-29');
+    expect([...p].map(([d, x]) => `${d.slice(8)}:${x.kind === 'rest' ? '-' : x.dayTypeId}`)).toEqual(
+      ['21:-', '22:-', '23:A', '24:-', '25:B', '26:-', '27:C', '28:-', '29:-'],
+    );
+  });
+  it('a rest day points at the next scheduled day; a training day is due today', () => {
+    expect(nextWeekly(fb, '2026-11-21', false)).toMatchObject({ kind: 'rest', nextDayTypeId: 'A', date: '2026-11-23' });
+    expect(nextWeekly(fb, '2026-11-25', false)).toMatchObject({ kind: 'workout', dayTypeId: 'B', date: '2026-11-25' });
+  });
+  it('a missed day is not carried over: Wednesday is still B', () => {
+    // No workout on Monday; Wednesday's slot is B regardless.
+    expect(nextWeekly(fb, '2026-11-25', false)).toMatchObject({ dayTypeId: 'B' });
+  });
+  it('an all-rest week is empty', () => {
+    expect(nextWeekly({ rotation: Array(7).fill('rest') }, '2026-11-25', false)).toEqual({ kind: 'empty' });
+  });
+});

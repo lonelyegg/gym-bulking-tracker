@@ -6,11 +6,11 @@ import {
 } from '../db/schema';
 import { primaryMuscle, REGIONS, regionOf, resolveMuscles, summaryLine, type MuscleMap } from '../lib/muscles';
 import { MuscleEditor } from '../components/MuscleEditor';
-import { fmtClock, fmtRir } from '../lib/logic';
+import { fmtClock, fmtRir, scheduleMode, WEEKDAYS } from '../lib/logic';
 import { saveSetting, settings } from '../state/settings';
 import { ExercisePicker } from '../components/ExercisePicker';
 import {
-  back, confirmSheet, DAY_COLORS, DAY_ICONS, go, Header, PageTitle, RirPicker, Sheet, Stepper, toast,
+  back, confirmSheet, DAY_COLORS, DAY_ICONS, go, Header, PageTitle, RirPicker, Segmented, Sheet, Stepper, toast,
 } from '../components/ui';
 
 const liveDayTypes = async () => (await db.day_types.toArray()).filter((d) => !d.deleted).sort((a, b) => a.name.localeCompare(b.name));
@@ -20,7 +20,8 @@ const liveDayTypes = async () => (await db.day_types.toArray()).filter((d) => !d
 export function PlanScreen() {
   const splits = useLive(async () => (await db.splits.toArray()).filter((s) => !s.deleted).sort((a, b) => a.name.localeCompare(b.name)), []) ?? [];
   const dayTypes = useLive(liveDayTypes, []) ?? [];
-  const activeId = settings.value.active_split_id;
+  const programOn = !!settings.value.active_program;
+  const activeId = programOn ? null : settings.value.active_split_id;
   const dt = (id: string) => dayTypes.find((d) => d.id === id);
 
   const newSplit = async () => {
@@ -41,6 +42,16 @@ export function PlanScreen() {
           <div class="w-50"><Stepper value={settings.value.weekly_target} min={1} max={14} onChange={(v) => saveSetting('weekly_target', v)} /></div>
         </div>
       </section>
+
+      <h3 class="section-title">Programs</h3>
+      <button class={`list-item ${programOn ? 'active-split' : ''}`} onClick={() => go('/program')}>
+        <span class="day-dot text-dot" style={{ background: '#ff9f43' }}>5×5</span>
+        <span class="grow left">
+          <span class="block bold">StrongLifts 5×5 {programOn && <span class="tag">Active</span>}</span>
+          <span class="block muted small">Squat, bench, row, press, deadlift · 3×/week · weights go up for you, deloads when you stall</span>
+        </span>
+        <span class="muted">›</span>
+      </button>
 
       <h3 class="section-title">Splits</h3>
       {splits.map((s) => (
@@ -83,8 +94,10 @@ export function SplitEditorScreen({ id }: { id: string }) {
   const split = useLive(() => db.splits.get(id), [id]);
   const dayTypes = useLive(liveDayTypes, []) ?? [];
   const [adding, setAdding] = useState(false);
+  const [slot, setSlot] = useState<number | null>(null); // weekly: which weekday is being changed
   if (!split) return <div class="page" />;
-  const isActive = settings.value.active_split_id === id;
+  const isActive = settings.value.active_split_id === id && !settings.value.active_program;
+  const mode = scheduleMode(split);
   const setRot = (rotation: string[]) => patch('splits', id, { rotation });
   const move = (i: number, d: number) => {
     const r = [...split.rotation];
@@ -92,6 +105,37 @@ export function SplitEditorScreen({ id }: { id: string }) {
     if (j < 0 || j >= r.length) return;
     [r[i], r[j]] = [r[j], r[i]];
     setRot(r);
+  };
+  const setMode = async (m: 'weekly' | 'cycle') => {
+    if (m === mode) return;
+    if (m === 'weekly') {
+      let r = [...split.rotation];
+      if (r.length > 7) {
+        if (!(await confirmSheet(`A week has 7 days, so only the first 7 of your ${r.length} entries are kept. Continue?`, 'Continue'))) return;
+        r = r.slice(0, 7);
+      }
+      while (r.length < 7) r.push(REST);
+      await patch('splits', id, { schedule: 'weekly', rotation: r });
+    } else {
+      await patch('splits', id, { schedule: 'cycle' });
+    }
+  };
+  const label = (entry: string) => {
+    const d = dayTypes.find((x) => x.id === entry);
+    return entry === REST
+      ? <><span class="day-dot rest">😴</span><span class="grow">Rest day</span></>
+      : <><span class="day-dot" style={{ background: d?.color }}>{d?.icon}</span><span class="grow">{d?.name ?? 'Deleted day'}</span></>;
+  };
+  const pick = (entry: string) => {
+    if (mode === 'weekly' && slot != null) {
+      const r = [...split.rotation];
+      r[slot] = entry;
+      setRot(r);
+      setSlot(null);
+    } else {
+      setRot([...split.rotation, entry]);
+      setAdding(false);
+    }
   };
 
   return (
@@ -102,39 +146,48 @@ export function SplitEditorScreen({ id }: { id: string }) {
         <input class="input" value={split.name} onChange={(e) => patch('splits', id, { name: (e.currentTarget as HTMLInputElement).value })} />
       </div>
       {isActive
-        ? <p class="good small">✓ This is your active split.</p>
-        : <button class="btn primary block" onClick={() => saveSetting('active_split_id', id)}>Make this my active split</button>}
+        ? <p class="good small">✓ This is your active plan.</p>
+        : <button class="btn primary block" onClick={async () => { await saveSetting('active_split_id', id); await saveSetting('active_program', null); }}>Make this my active split</button>}
 
-      <h3 class="section-title">Rotation</h3>
-      <p class="muted small">Repeats in order. Rest days count as calendar days off.</p>
-      {split.rotation.map((entry, i) => {
-        const d = dayTypes.find((x) => x.id === entry);
-        return (
+      <h3 class="section-title">Schedule</h3>
+      <Segmented label="Schedule type" value={mode === 'weekly' ? 'Fixed weekdays' : 'Rotating cycle'}
+        options={['Fixed weekdays', 'Rotating cycle']} onChange={(v) => setMode(v === 'Fixed weekdays' ? 'weekly' : 'cycle')} />
+      <p class="muted small">{mode === 'weekly'
+        ? 'Each weekday always has the same workout. A missed day isn’t moved; the plan just carries on with the next scheduled day.'
+        : 'Workouts repeat in order, continuing from your last one whatever the weekday. Rest entries count as days off.'}</p>
+
+      {mode === 'weekly' ? WEEKDAYS.map((wd, i) => (
+        <button key={wd} class="list-item" onClick={() => setSlot(i)}>
+          <span class="weekday">{wd}</span>
+          {label(split.rotation[i] ?? REST)}
+          <span class="muted">›</span>
+        </button>
+      )) : (<>
+        {split.rotation.map((entry, i) => (
           <div key={i} class="list-item static">
             <span class="muted small w-20">{i + 1}</span>
-            {entry === REST
-              ? <><span class="day-dot rest">😴</span><span class="grow">Rest day</span></>
-              : <><span class="day-dot" style={{ background: d?.color }}>{d?.icon}</span><span class="grow">{d?.name ?? 'Deleted day'}</span></>}
+            {label(entry)}
             <button class="icon-btn sm" aria-label="Move up" onClick={() => move(i, -1)}>↑</button>
             <button class="icon-btn sm" aria-label="Move down" onClick={() => move(i, 1)}>↓</button>
             <button class="icon-btn sm" aria-label="Remove" onClick={() => setRot(split.rotation.filter((_, k) => k !== i))}>✕</button>
           </div>
-        );
-      })}
-      <button class="btn ghost block" onClick={() => setAdding(true)}>+ Add day</button>
+        ))}
+        <button class="btn ghost block" onClick={() => setAdding(true)}>+ Add day</button>
+      </>)}
 
       <button class="btn ghost block danger-text mt" onClick={async () => {
         if (!(await confirmSheet(`Delete split “${split.name}”? Day types are kept.`, 'Delete', true))) return;
         await softDelete('splits', [id]);
-        if (isActive) await saveSetting('active_split_id', null);
+        if (settings.value.active_split_id === id) await saveSetting('active_split_id', null);
         go('/plan');
       }}>Delete split</button>
 
-      <Sheet open={adding} onClose={() => setAdding(false)} title="Add to rotation">
+      <Sheet open={adding || slot != null} onClose={() => { setAdding(false); setSlot(null); }}
+        title={slot != null ? `${WEEKDAYS[slot]}day`.replace('Tueday', 'Tuesday').replace('Wedday', 'Wednesday').replace('Thuday', 'Thursday').replace('Satday', 'Saturday') : 'Add to rotation'}>
         <div class="menu-list">
-          <button onClick={() => { setRot([...split.rotation, REST]); setAdding(false); }}>😴 Rest day</button>
+          <button onClick={() => pick(REST)}>😴 Rest day</button>
           {dayTypes.map((d) => (
-            <button key={d.id} onClick={() => { setRot([...split.rotation, d.id]); setAdding(false); }}>
+            <button key={d.id} onClick={() => pick(d.id)}>
               <span class="day-dot" style={{ background: d.color }}>{d.icon}</span> {d.name}
             </button>
           ))}
@@ -235,10 +288,9 @@ function TemplateForm({ t, onDone }: { t: TemplateExercise; onDone: () => void }
     <div class="form">
       <label>Sets</label>
       <Stepper value={v.target_sets} min={1} max={10} onChange={(x) => setV({ ...v, target_sets: x })} />
-      <label>Rep range (min – max)</label>
-      <div class="row gap">
-        <Stepper value={v.rep_min} min={1} max={100} onChange={(x) => setV({ ...v, rep_min: x, rep_max: Math.max(x, v.rep_max) })} />
-        <Stepper value={v.rep_max} min={1} max={100} onChange={(x) => setV({ ...v, rep_max: x, rep_min: Math.min(x, v.rep_min) })} />
+      <div class="pair">
+        <div><span class="pair-label">Fewest reps</span><Stepper value={v.rep_min} min={1} max={100} onChange={(x) => setV({ ...v, rep_min: x, rep_max: Math.max(x, v.rep_max) })} /></div>
+        <div><span class="pair-label">Most reps</span><Stepper value={v.rep_max} min={1} max={100} onChange={(x) => setV({ ...v, rep_max: x, rep_min: Math.min(x, v.rep_min) })} /></div>
       </div>
       <label>Target reps in reserve</label>
       <RirPicker value={v.target_rir} onChange={(x) => setV({ ...v, target_rir: x })} />

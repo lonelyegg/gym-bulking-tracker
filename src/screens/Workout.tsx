@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { db, patch, useLive } from '../db/db';
 import type { Exercise, PrType, Workout, WorkoutExercise, WorkoutSet } from '../db/schema';
 import {
@@ -13,6 +13,9 @@ import {
   updateSet, type PreviousSession,
 } from '../state/workout';
 import { TimerPanel } from '../components/timer';
+import { liftOfExercise, plateText, replay, WORK_REPS, type ProgramConfig } from '../lib/program';
+import { programConfig } from '../state/program';
+import { useTraining } from '../state/training';
 import { ExercisePicker } from '../components/ExercisePicker';
 import {
   confirmSheet, go, RirPicker, Sheet, Stepper, Toggle, toast,
@@ -47,6 +50,14 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
   const [editing, setEditing] = useState<WorkoutSet | null>(null);
   const backfill = !!workout.backfill;
   const [durationMin, setDurationMin] = useState(60);
+  // 5×5 program: progress before this session, for the per-lift hints.
+  const isProgram = !!workout.program;
+  const training = useTraining();
+  const cfg = programConfig();
+  const programState = useMemo(
+    () => (isProgram && training ? replay(training.workouts, training.sets, cfg, { before: workout.started_at }) : null),
+    [isProgram, training, workout.started_at, settings.value.program_sl5x5],
+  );
 
   const elapsed = (now.value - Date.parse(workout.started_at)) / 1000;
   const done = sets.filter((s) => s.completed_at && !s.is_warmup).length;
@@ -87,6 +98,7 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
           exercise={exercises.get(we.exercise_id)}
           sets={sets.filter((s) => s.workout_exercise_id === we.id).sort((a, b) => a.set_number - b.set_number)}
           prev={prevs[we.exercise_id] ?? null}
+          program={isProgram ? programInfo(we, sets, programState, cfg) : null}
           onEditSet={setEditing}
           onSwap={() => setPicker({ mode: 'swap', we })}
           isFirst={we === wes[0]}
@@ -117,8 +129,10 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
         <SetEditor
           set={sets.find((s) => s.id === editing.id) ?? editing}
           exercise={exercises.get(editing.exercise_id)}
-          defaults={rowDefaults(sets.filter((s) => s.workout_exercise_id === editing.workout_exercise_id).sort((a, b) => a.set_number - b.set_number), prevs[editing.exercise_id] ?? null).get(editing.id)}
+          defaults={rowDefaults(sets.filter((s) => s.workout_exercise_id === editing.workout_exercise_id).sort((a, b) => a.set_number - b.set_number), prevs[editing.exercise_id] ?? null,
+            isProgram && liftOfExercise(editing.exercise_id) ? WORK_REPS : null).get(editing.id)}
           targetRir={wes.find((w) => w.id === editing.workout_exercise_id)?.target_rir ?? 2}
+          noRir={isProgram && !!liftOfExercise(editing.exercise_id)}
           onClose={() => setEditing(null)}
         />
       )}
@@ -163,7 +177,7 @@ interface RowDefault { weight: number | null; reps: number | null; prevLabel: st
  * For each set row: what to pre-fill. The k-th working set uses last session's k-th
  * working set (warm-ups map to warm-ups). Extra rows copy the row above.
  */
-function rowDefaults(sets: WorkoutSet[], prev: PreviousSession | null): Map<string, RowDefault> {
+function rowDefaults(sets: WorkoutSet[], prev: PreviousSession | null, fixedReps: number | null = null): Map<string, RowDefault> {
   const out = new Map<string, RowDefault>();
   let kW = 0;
   let kU = 0;
@@ -175,11 +189,30 @@ function rowDefaults(sets: WorkoutSet[], prev: PreviousSession | null): Map<stri
     const fallback = s.is_warmup ? null : list?.at(-1) ?? null;
     const src = p ?? fallback;
     const weight = s.weight_kg ?? src?.weight_kg ?? above.weight;
-    const reps = s.reps ?? src?.reps ?? above.reps;
+    // Program lifts: always pre-fill the prescribed reps (never last time's missed reps).
+    const reps = s.reps ?? (fixedReps != null && !s.is_warmup ? fixedReps : src?.reps ?? above.reps);
     out.set(s.id, { weight, reps, prevLabel: p ? `${fmtKg(p.weight_kg)}×${p.reps}` : null });
     if (!s.is_warmup) above = { weight, reps };
   }
   return out;
+}
+
+// ---------- 5×5 program hints ----------
+
+interface ProgramInfo { hint: string; plates: string | null }
+
+function programInfo(we: WorkoutExercise, sets: WorkoutSet[], state: ReturnType<typeof replay> | null, cfg: ProgramConfig): ProgramInfo | null {
+  const lift = liftOfExercise(we.exercise_id);
+  if (!lift || !state) return null;
+  const work = sets.filter((x) => x.workout_exercise_id === we.id && !x.is_warmup);
+  const target = work[0]?.weight_kg ?? state.lifts[lift].weight;
+  const st = state.lifts[lift];
+  const total = we.target_sets * WORK_REPS;
+  const next = Math.round((target + cfg.inc[lift]) * 100) / 100;
+  const hint = st.fails > 0 && st.failWeight != null && Math.abs(st.failWeight - target) < 1e-6
+    ? `Missed reps at ${fmtKg(target)} kg last time (${st.fails} of 3 before a 10% deload). Get all ${total} reps to move up.`
+    : `Get all ${total} reps at ${fmtKg(target)} kg → ${fmtKg(next)} kg next time.`;
+  return { hint, plates: plateText(target, cfg) };
 }
 
 // ---------- Exercise card ----------
@@ -199,17 +232,18 @@ function ExerciseCard(props: {
   exercise: Exercise | undefined;
   sets: WorkoutSet[];
   prev: PreviousSession | null;
+  program: ProgramInfo | null;
   onEditSet: (s: WorkoutSet) => void;
   onSwap: () => void;
   isFirst: boolean;
   isLast: boolean;
 }) {
-  const { we, exercise, sets, prev } = props;
+  const { we, exercise, sets, prev, program } = props;
   const [menu, setMenu] = useState(false);
   const [targets, setTargets] = useState(false);
   const [showNote, setShowNote] = useState(!!we.note);
-  const defaults = rowDefaults(sets, prev);
-  const hint = exercise
+  const defaults = rowDefaults(sets, prev, program ? we.rep_max : null);
+  const hint = exercise && !program
     ? progressionHint(
       (prev?.working ?? []).map((s) => ({ weight_kg: s.weight_kg!, reps: s.reps!, rir: s.rir })),
       we, exercise, settings.value.dumbbell_ladder,
@@ -225,7 +259,7 @@ function ExerciseCard(props: {
     const d = defaults.get(s.id);
     const weight = d?.weight ?? (exercise?.equipment === 'bodyweight' ? 0 : null);
     if (weight == null || d?.reps == null) { props.onEditSet(s); return; }
-    const prs = await completeSet(s, { weight_kg: weight, reps: d.reps, rir: s.rir ?? (s.is_warmup ? null : we.target_rir) });
+    const prs = await completeSet(s, { weight_kg: weight, reps: d.reps, rir: program ? null : s.rir ?? (s.is_warmup ? null : we.target_rir) });
     announcePRs(exercise, prs, weight, d.reps);
   };
 
@@ -241,17 +275,24 @@ function ExerciseCard(props: {
   }
 
   return (
-    <section class="card ex-card">
+    <section class={`card ex-card ${program ? 'no-rir' : ''}`}>
       <div class="ex-head">
         <button class="ex-title" onClick={() => setMenu(true)}>
           <span class="bold">{exercise?.name ?? 'Unknown exercise'}</span>
           <span class="muted small block">
-            {we.target_sets} × {we.rep_min}–{we.rep_max} @ RIR {fmtRir(we.target_rir)} · rest {fmtClock(we.rest_s)}
+            {program
+              ? `${we.target_sets} × ${we.rep_max} · rest 3:00 (5:00 after a miss)`
+              : `${we.target_sets} × ${we.rep_min}–${we.rep_max} @ RIR ${fmtRir(we.target_rir)} · rest ${fmtClock(we.rest_s)}`}
           </span>
         </button>
         <button class="icon-btn" aria-label="Exercise menu" onClick={() => setMenu(true)}>⋯</button>
       </div>
 
+      {program && (
+        <div class="hint program-hint">
+          <span>{program.hint}{program.plates && <span class="block plates">🏋️ {program.plates}</span>}</span>
+        </div>
+      )}
       {hint && (
         <div class="hint">
           <span>{hintText(hint, we.rep_min, we.rep_max)}</span>
@@ -267,7 +308,7 @@ function ExerciseCard(props: {
       )}
 
       <div class="set-grid set-head">
-        <span>Set</span><span>Previous</span><span>kg</span><span>Reps</span><span>RIR</span><span />
+        <span>Set</span><span>Previous</span><span>kg</span><span>Reps</span>{!program && <span>RIR</span>}<span />
       </div>
       {sets.map((s) => {
         const d = defaults.get(s.id)!;
@@ -279,9 +320,11 @@ function ExerciseCard(props: {
             <button class="cell prev" onClick={() => props.onEditSet(s)}>{d.prevLabel ?? '–'}</button>
             <button class={`cell val ${s.weight_kg == null ? 'ghost' : ''}`} onClick={() => props.onEditSet(s)}>{fmtKg(d.weight)}</button>
             <button class={`cell val ${s.reps == null ? 'ghost' : ''}`} onClick={() => props.onEditSet(s)}>{d.reps ?? '–'}</button>
-            <button class={`cell rir ${s.rir == null ? 'ghost' : ''}`} onClick={() => props.onEditSet(s)}>
-              {s.is_warmup ? '' : fmtRir(s.rir ?? we.target_rir)}
-            </button>
+            {!program && (
+              <button class={`cell rir ${s.rir == null ? 'ghost' : ''}`} onClick={() => props.onEditSet(s)}>
+                {s.is_warmup ? '' : fmtRir(s.rir ?? we.target_rir)}
+              </button>
+            )}
             <button class={`check ${done ? 'on' : ''}`} aria-label={done ? 'Mark not done' : 'Complete set'} onClick={() => tapComplete(s)}>
               ✓
             </button>
@@ -327,10 +370,9 @@ function TargetsForm({ we, onDone }: { we: WorkoutExercise; onDone: () => void }
   const [v, setV] = useState({ rep_min: we.rep_min, rep_max: we.rep_max, target_rir: we.target_rir, rest_s: we.rest_s });
   return (
     <div class="form">
-      <label>Rep range</label>
-      <div class="row gap">
-        <Stepper value={v.rep_min} min={1} max={100} onChange={(x) => setV({ ...v, rep_min: x, rep_max: Math.max(x, v.rep_max) })} />
-        <Stepper value={v.rep_max} min={1} max={100} onChange={(x) => setV({ ...v, rep_max: x, rep_min: Math.min(x, v.rep_min) })} />
+      <div class="pair">
+        <div><span class="pair-label">Fewest reps</span><Stepper value={v.rep_min} min={1} max={100} onChange={(x) => setV({ ...v, rep_min: x, rep_max: Math.max(x, v.rep_max) })} /></div>
+        <div><span class="pair-label">Most reps</span><Stepper value={v.rep_max} min={1} max={100} onChange={(x) => setV({ ...v, rep_max: x, rep_min: Math.min(x, v.rep_min) })} /></div>
       </div>
       <label>Target RIR</label>
       <RirPicker value={v.target_rir} onChange={(x) => setV({ ...v, target_rir: x })} />
@@ -348,12 +390,14 @@ function SetEditor(props: {
   exercise: Exercise | undefined;
   defaults: RowDefault | undefined;
   targetRir: number;
+  /** 5×5 program lifts don't use reps in reserve. */
+  noRir?: boolean;
   onClose: () => void;
 }) {
   const { set, exercise } = props;
   const [weight, setWeight] = useState<number | null>(props.defaults?.weight ?? (exercise?.equipment === 'bodyweight' ? 0 : null));
   const [reps, setReps] = useState<number | null>(props.defaults?.reps ?? null);
-  const [rir, setRir] = useState<number | null>(set.rir ?? (set.is_warmup ? null : props.targetRir));
+  const [rir, setRir] = useState<number | null>(props.noRir ? null : set.rir ?? (set.is_warmup ? null : props.targetRir));
   const [warm, setWarm] = useState(!!set.is_warmup);
   const ladder = settings.value.dumbbell_ladder;
   const isDb = exercise?.equipment === 'dumbbell';
@@ -368,7 +412,7 @@ function SetEditor(props: {
   };
 
   const save = async (complete: boolean) => {
-    const values = { weight_kg: weight, reps, rir: warm ? null : rir, is_warmup: (warm ? 1 : 0) as 0 | 1 };
+    const values = { weight_kg: weight, reps, rir: warm || props.noRir ? null : rir, is_warmup: (warm ? 1 : 0) as 0 | 1 };
     if (complete && !set.completed_at) {
       if (weight == null || reps == null) { toast('Enter weight and reps first'); return; }
       await updateSet(set, { is_warmup: values.is_warmup });
@@ -388,7 +432,7 @@ function SetEditor(props: {
         <Stepper value={weight} decimals unit="kg" onChange={setWeight} onInc={incW} onDec={decW} placeholder="0" />
         <label>Reps</label>
         <Stepper value={reps} min={0} max={200} onChange={setReps} placeholder="0" />
-        {!warm && (<>
+        {!warm && !props.noRir && (<>
           <label>Reps in reserve</label>
           <RirPicker value={rir} onChange={setRir} target={props.targetRir} />
         </>)}

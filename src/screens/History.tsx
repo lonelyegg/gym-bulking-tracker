@@ -9,6 +9,8 @@ import { MonthCalendar, monthLabel } from '../components/Calendar';
 import { IconChevron } from '../components/icons';
 import { fmtDay, PrRow } from '../components/PrRow';
 import { usePlan } from '../components/usePlan';
+import { DAY_LIFTS, LIFT_NAME, replay, type Day } from '../lib/program';
+import { programConfig } from '../state/program';
 import { confirmSheet, go, Header, PageTitle } from '../components/ui';
 
 /** Kept across navigation, so coming back from a workout returns to the same month. */
@@ -128,6 +130,8 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
         <Stat label="Avg rest" value={s.avgRest != null ? fmtClock(s.avgRest) : '–'} />
       </div>
 
+      {w.program && w.program_day && <ProgramResults workoutId={id} day={w.program_day as Day} />}
+
       {s.prs.length > 0 && (
         <section class="card pr-card">
           <div class="bold">🏆 {s.prs.length} personal record{s.prs.length > 1 ? 's' : ''}</div>
@@ -181,5 +185,34 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div class="stat-value">{value}</div>
       <div class="muted small">{label}</div>
     </div>
+  );
+}
+
+/** For a 5×5 session: each lift's result and what it means for next time. */
+function ProgramResults({ workoutId, day }: { workoutId: string; day: Day }) {
+  const data = useTraining();
+  const state = useMemo(() => (data ? replay(data.workouts, data.sets, programConfig()) : null), [data]);
+  if (!state) return null;
+  const rows = DAY_LIFTS[day].map((lift) => ({ lift, h: state.lifts[lift].history.find((x) => x.workoutId === workoutId) })).filter((r) => r.h);
+  if (!rows.length) return null;
+  return (
+    <section class="card program-results">
+      <div class="bold">5×5 · Workout {day}</div>
+      {rows.map(({ lift, h }) => (
+        <div key={lift} class="pr-line">
+          <span class="grow">
+            <span class="block">{LIFT_NAME[lift]} {h!.weight != null ? `${fmtKg(h!.weight)} kg` : ''}</span>
+            <span class="block muted small">{h!.result === 'skipped' ? 'Skipped' : h!.reps.join(' / ')}</span>
+          </span>
+          <span class={`right small ${h!.result === 'success' ? 'good-text' : h!.result === 'skipped' ? 'muted' : h!.result === 'deload' ? 'warn-text' : 'bad-text'}`}>
+            {h!.result === 'success' && `✓ Next: ${fmtKg(h!.next)} kg`}
+            {h!.result === 'fail' && `✗ Repeat ${fmtKg(h!.next)} kg (${h!.fails}/3)`}
+            {h!.result === 'deload' && `↓ Deload to ${fmtKg(h!.next)} kg`}
+            {h!.result === 'skipped' && `Stays ${fmtKg(h!.next)} kg`}
+          </span>
+        </div>
+      ))}
+      <button class="link" onClick={() => go('/program')}>Program ›</button>
+    </section>
   );
 }

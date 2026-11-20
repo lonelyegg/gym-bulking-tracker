@@ -152,3 +152,24 @@ export function measurementTable(entries: { date: string; site: string; value_cm
 export const changeIsGood = (site: Site, change: number) => (site.lowerIsBetter ? change < 0 : change > 0);
 
 export const siteId = (label: string) => label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '') || 'custom';
+
+// ---------- Calorie estimate ----------
+
+export interface Profile { weightKg: number; heightCm: number; age: number; sex: 'male' | 'female'; sessionsPerWeek: number; physicalJob: boolean }
+
+/** Activity multiplier from training sessions per week (+0.15 for a physical job). */
+export function activityFactor(sessionsPerWeek: number, physicalJob: boolean): number {
+  const base = sessionsPerWeek <= 1 ? 1.2 : sessionsPerWeek <= 3 ? 1.375 : sessionsPerWeek <= 5 ? 1.55 : 1.725;
+  return Math.round((base + (physicalJob ? 0.15 : 0)) * 1000) / 1000;
+}
+
+/**
+ * Mifflin–St Jeor resting energy × activity = maintenance; + surplus = lean-bulk target.
+ * A starting point only: the bulk check corrects it from your real weight trend.
+ */
+export function estimateCalories(p: Profile, surplus = 250) {
+  const bmr = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age + (p.sex === 'male' ? 5 : -161);
+  const factor = activityFactor(p.sessionsPerWeek, p.physicalJob);
+  const maintenance = Math.round((bmr * factor) / 10) * 10;
+  return { bmr: Math.round(bmr), factor, maintenance, bulk: Math.round((maintenance + surplus) / 50) * 50 };
+}

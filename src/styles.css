@@ -475,3 +475,37 @@ main.in-workout { padding-bottom: calc(40px + var(--safe-bottom)); }
 .place-chips .chip, .chip.place { text-transform: none; }
 .add-modes { margin: 4px 0 6px; }
 .add-modes .btn { margin-top: 0; }
+.ex-card.no-rir .set-grid { grid-template-columns: 34px minmax(58px, 1fr) 72px 58px 52px; }
+.program-hint { color: #ffd9b0; background: color-mix(in srgb, var(--orange) 10%, transparent); }
+.plates { margin-top: 3px; color: var(--muted); }
+.easy-btn { margin-top: 10px; }
+
+/* ---------- program ---------- */
+.program-intro { display: grid; gap: 8px; }
+.program-intro p { margin: 0; }
+.next-card { --c: #ff9f43; background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--c) 30%, transparent) 0%, transparent 60%), var(--surface); border-color: color-mix(in srgb, var(--c) 35%, var(--border)); }
+.next-card .today-name { margin: 2px 0 6px; }
+.plan-lift, .lift-row, .pr-line { display: flex; align-items: center; gap: 10px; min-height: 52px; border-top: 1px solid var(--border); }
+.lift-row:first-child { border-top: 0; }
+.lift-weight { padding: 8px 10px; border-radius: 10px; background: var(--surface-2); white-space: nowrap; }
+.good-text { color: var(--good); } .bad-text { color: var(--danger); } .warn-text { color: var(--warn); }
+.day-chips { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.day-chips .chip { padding: 0; text-transform: none; }
+.setting-row { min-height: 52px; }
+.w-55 { width: 58%; }
+.session-lifts { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.rules { padding-left: 18px; display: grid; gap: 6px; margin: 8px 0; }
+.program-results { border-color: color-mix(in srgb, var(--orange) 40%, var(--border)); }
+.weekday { width: 38px; font-weight: 700; color: var(--muted); font-size: 14px; }
+.day-dot.text-dot { font-weight: 800; font-size: 12px; color: #2a1600; }
+
+/* Number steppers: never hide what you type behind the unit; compact when two share a row. */
+.step-value input { padding: 0 34px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pair-label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px 2px; }
+.row .stepper, .pair .stepper { gap: 6px; }
+.pair .stepper .step-btn, .row .stepper .step-btn { width: 42px; height: 48px; font-size: 22px; border-radius: 12px; }
+.pair .stepper .step-value input, .row .stepper .step-value input { height: 48px; font-size: 18px; padding: 0 20px 0 4px; }
+.pair .stepper .step-unit, .row .stepper .step-unit { right: 6px; font-size: 11px; }
+.estimate { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+.estimate b { font-size: 17px; }

@@ -8,6 +8,7 @@ import { HistoryScreen, PrsScreen, WorkoutDetailScreen } from './screens/History
 import { IconCalendar, IconDumbbell, IconFood, IconHome, IconScale } from './components/icons';
 import { FoodScreen, FoodsScreen } from './screens/Food';
 import { BodyScreen } from './screens/Body';
+import { ProgramScreen } from './screens/Program';
 import {
   DayTypeEditorScreen, ExerciseEditScreen, ExercisesScreen, PlanScreen, SplitEditorScreen,
 } from './screens/Plan';
@@ -33,6 +34,7 @@ function match(path: string) {
   if (a === 'settings') return { tab: 'home', el: <SettingsScreen /> };
   if (a === 'food') return { tab: 'food', el: b === 'foods' ? <FoodsScreen /> : <FoodScreen /> };
   if (a === 'body') return { tab: 'body', el: <BodyScreen /> };
+  if (a === 'program') return { tab: 'plan', el: <ProgramScreen /> };
   return { tab: 'home', el: <HomeScreen /> };
 }
 

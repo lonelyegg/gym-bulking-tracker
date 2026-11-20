@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { db, put } from '../db/db';
 import { DEFAULT_SITES, type Site } from '../lib/body';
+import type { ProgramConfig } from '../lib/program';
 
 export type BeepMode = 'transient' | 'ambient' | 'off';
 
@@ -23,6 +24,14 @@ export interface Settings {
   gain_rate_max_pct: number;
   /** Body measurements you track (defaults + your custom ones). */
   measurement_sites: Site[];
+  // For the calorie estimate
+  height_cm: number | null;
+  birth_year: number | null;
+  sex: 'male' | 'female' | null;
+  physical_job: boolean;
+  /** A program that replaces the active split on Home and the calendar (e.g. 'sl5x5'). */
+  active_program: string | null;
+  program_sl5x5: Partial<ProgramConfig> | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,6 +49,12 @@ export const DEFAULT_SETTINGS: Settings = {
   gain_rate_min_pct: 0.25,
   gain_rate_max_pct: 0.5,
   measurement_sites: DEFAULT_SITES,
+  height_cm: null,
+  birth_year: null,
+  sex: null,
+  physical_job: false,
+  active_program: null,
+  program_sl5x5: null,
 };
 
 export const settings = signal<Settings>({ ...DEFAULT_SETTINGS });

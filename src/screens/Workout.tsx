@@ -13,7 +13,7 @@ import {
   updateSet, type PreviousSession,
 } from '../state/workout';
 import { TimerPanel } from '../components/timer';
-import { IconCheck } from '../components/icons';
+import { IconCheck, IconChevronLeft, IconDumbbell, IconMore, IconPlus, IconTrend } from '../components/icons';
 import { liftOfExercise, plateText, replay, WORK_REPS, type ProgramConfig } from '../lib/program';
 import { programConfig } from '../state/program';
 import { useTraining } from '../state/training';
@@ -63,6 +63,8 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
   const elapsed = (now.value - Date.parse(workout.started_at)) / 1000;
   const done = sets.filter((s) => s.completed_at && !s.is_warmup).length;
   const total = sets.filter((s) => !s.is_warmup).length;
+  // The exercise you're on: the first one (not skipped) with a set left to do.
+  const current = wes.find((we) => !we.skipped && sets.some((s) => s.workout_exercise_id === we.id && !s.completed_at));
 
   const finish = async () => {
     const n = await incompleteSetCount(wid);
@@ -74,7 +76,7 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
   return (
     <div class="page workout-page">
       <header class="topbar workout-top">
-        <button class="icon-btn" aria-label="Back to home" onClick={() => go('/')}>‹</button>
+        <button class="icon-btn" aria-label="Back to home" onClick={() => go('/')}><IconChevronLeft size={24} /></button>
         <div class="topbar-title">
           <span class="day-dot" style={{ background: workout.color }}>{workout.icon}</span>
           <span>
@@ -85,8 +87,11 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
           </span>
         </div>
         <div class="topbar-right">
-          <button class="icon-btn" aria-label="Workout menu" onClick={() => setMenu(true)}>⋯</button>
+          <button class="icon-btn" aria-label="Workout menu" onClick={() => setMenu(true)}><IconMore /></button>
           <button class="btn primary sm" onClick={() => setFinishing(true)}>Finish</button>
+        </div>
+        <div class="wk-progress" role="progressbar" aria-label="Sets done" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+          <i style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </div>
       </header>
 
@@ -104,11 +109,12 @@ function ActiveWorkout({ workout }: { workout: Workout }) {
           onSwap={() => setPicker({ mode: 'swap', we })}
           isFirst={we === wes[0]}
           isLast={we === wes[wes.length - 1]}
+          current={we === current}
         />
       ))}
 
       {!wes.length && <p class="empty">Empty workout. Add your first exercise.</p>}
-      <button class="btn block add-ex" onClick={() => setPicker({ mode: 'add' })}>+ Add exercise</button>
+      <button class="btn block add-ex" onClick={() => setPicker({ mode: 'add' })}><IconPlus /> Add exercise</button>
       <div class="bottom-space" />
 
       <ExercisePicker
@@ -238,8 +244,11 @@ function ExerciseCard(props: {
   onSwap: () => void;
   isFirst: boolean;
   isLast: boolean;
+  current: boolean;
 }) {
   const { we, exercise, sets, prev, program } = props;
+  const allDone = sets.length > 0 && sets.every((s) => s.completed_at);
+  const nextId = props.current ? sets.find((s) => !s.completed_at)?.id : undefined;
   const [menu, setMenu] = useState(false);
   const [targets, setTargets] = useState(false);
   const [showNote, setShowNote] = useState(!!we.note);
@@ -276,27 +285,29 @@ function ExerciseCard(props: {
   }
 
   return (
-    <section class={`card ex-card ${program ? 'no-rir' : ''}`}>
+    <section class={`card ex-card ${program ? 'no-rir' : ''} ${props.current ? 'current' : ''} ${allDone ? 'all-done' : ''}`}>
       <div class="ex-head">
         <button class="ex-title" onClick={() => setMenu(true)}>
-          <span class="bold">{exercise?.name ?? 'Unknown exercise'}</span>
+          <span class="bold ex-name">{allDone && <span class="ex-done"><IconCheck size={14} /></span>}{exercise?.name ?? 'Unknown exercise'}</span>
           <span class="muted small block">
             {program
               ? `${we.target_sets} × ${we.rep_max} · rest 3:00 (5:00 after a miss)`
               : `${we.target_sets} × ${we.rep_min}–${we.rep_max} @ RIR ${fmtRir(we.target_rir)} · rest ${fmtClock(we.rest_s)}`}
           </span>
         </button>
-        <button class="icon-btn" aria-label="Exercise menu" onClick={() => setMenu(true)}>⋯</button>
+        <button class="icon-btn" aria-label="Exercise menu" onClick={() => setMenu(true)}><IconMore /></button>
       </div>
 
       {program && (
         <div class="hint program-hint">
-          <span>{program.hint}{program.plates && <span class="block plates">Plates: {program.plates}</span>}</span>
+          <IconDumbbell size={16} class="hint-icon" />
+          <span class="grow">{program.hint}{program.plates && <span class="block plates">Plates: {program.plates}</span>}</span>
         </div>
       )}
       {hint && (
         <div class="hint">
-          <span>{hintText(hint, we.rep_min, we.rep_max)}</span>
+          <IconTrend size={16} class="hint-icon" />
+          <span class="grow">{hintText(hint, we.rep_min, we.rep_max)}</span>
           {hint.kind === 'add_weight' && sets.some((s) => !s.completed_at && !s.is_warmup && s.weight_kg !== hint.to) && (
             <button class="link" onClick={() => applyWeight(hint.to)}>Apply</button>
           )}
@@ -316,7 +327,7 @@ function ExerciseCard(props: {
         const done = !!s.completed_at;
         const label = s.is_warmup ? 'W' : String(sets.filter((x) => !x.is_warmup).indexOf(s) + 1);
         return (
-          <div key={s.id} class={`set-grid set-row ${done ? 'done' : ''} ${s.is_warmup ? 'warm' : ''}`}>
+          <div key={s.id} class={`set-grid set-row ${done ? 'done' : ''} ${s.is_warmup ? 'warm' : ''} ${s.id === nextId ? 'next' : ''}`}>
             <button class="cell setno" onClick={() => props.onEditSet(s)}>{label}</button>
             <button class="cell prev" onClick={() => props.onEditSet(s)}>{d.prevLabel ?? '–'}</button>
             <button class={`cell val ${s.weight_kg == null ? 'ghost' : ''}`} onClick={() => props.onEditSet(s)}>{fmtKg(d.weight)}</button>
@@ -333,7 +344,7 @@ function ExerciseCard(props: {
           </div>
         );
       })}
-      <button class="btn ghost block sm" onClick={() => addSet(we)}>+ Add set</button>
+      <button class="btn ghost block sm add-set" onClick={() => addSet(we)}><IconPlus size={16} /> Add set</button>
 
       <Sheet open={menu} onClose={() => setMenu(false)} title={exercise?.name}>
         <div class="menu-list">

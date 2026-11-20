@@ -6,7 +6,9 @@ import { prEvents, workoutsByDate } from '../lib/stats';
 import { useTraining } from '../state/training';
 import { deleteWorkout, summarize } from '../state/workout';
 import { MonthCalendar, monthLabel } from '../components/Calendar';
-import { IconChevron, IconEdit, IconTrophy } from '../components/icons';
+import { IconCheck, IconChevron, IconEdit, IconTrophy } from '../components/icons';
+import { BodyMap } from '../components/BodyMap';
+import { muscleLabel, resolveMuscles, type Muscle, type MuscleMap } from '../lib/muscles';
 import { fmtDay, PrRow } from '../components/PrRow';
 import { usePlan } from '../components/usePlan';
 import { DAY_LIFTS, LIFT_NAME, replay, type Day } from '../lib/program';
@@ -115,38 +117,46 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
   if (!w || !s) return <div class="page" />;
   return (
     <div class="page">
-      <Header title={w.name} back />
+      <Header title={w.status === 'done' ? 'Summary' : 'Workout'} back />
       <section class="summary-hero" style={{ '--c': w.color }}>
-        <div class="today-icon">{w.icon}</div>
-        <div>
-          <div class="bold big">{w.status === 'done' ? 'Workout complete' : 'In progress'}</div>
-          <div class="muted small">{new Date(w.started_at).toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+        <div class="summary-top">
+          <div class="today-icon">{w.icon}</div>
+          <div class="grow">
+            <div class="summary-kicker">{w.status === 'done' ? <><IconCheck size={14} /> Workout complete</> : 'In progress'}</div>
+            <div class="summary-title">{w.name}</div>
+            <div class="muted small">{new Date(w.started_at).toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </div>
+        <div class="summary-stats">
+          <Stat label="Time" value={fmtDuration(s.durationMs)} />
+          <Stat label="Sets" value={String(s.sets)} />
+          <Stat label="kg lifted" value={Math.round(s.volume).toLocaleString()} />
+          <Stat label="Avg rest" value={s.avgRest != null ? fmtClock(s.avgRest) : '–'} />
         </div>
       </section>
-      <div class="stat-grid">
-        <Stat label="Duration" value={fmtDuration(s.durationMs)} />
-        <Stat label="Working sets" value={String(s.sets)} />
-        <Stat label="Volume" value={`${Math.round(s.volume).toLocaleString()} kg`} />
-        <Stat label="Avg rest" value={s.avgRest != null ? fmtClock(s.avgRest) : '–'} />
-      </div>
 
       {w.program && w.program_day && <ProgramResults workoutId={id} day={w.program_day as Day} />}
 
       {s.prs.length > 0 && (
         <section class="card pr-card">
-          <div class="bold row gap-sm"><IconTrophy size={18} class="gold" /> {s.prs.length} personal record{s.prs.length > 1 ? 's' : ''}</div>
+          <div class="pr-card-head"><span class="pr-medal"><IconTrophy size={18} /></span>
+            <span><b>{s.prs.length} personal record{s.prs.length > 1 ? 's' : ''}</b><span class="block muted small">New bests this session</span></span></div>
           {s.prs.map(({ exercise, set }) => (
-            <div key={set.id} class="small">
-              {exercise}: {fmtKg(set.weight_kg)} kg × {set.reps} · <span class="muted">{set.pr_types.map((p) => PR_LABEL[p]).join(', ')}</span>
+            <div key={set.id} class="pr-card-row">
+              <span class="grow"><span class="block">{exercise}</span>
+                <span class="block muted small">{set.pr_types.map((p) => PR_LABEL[p]).join(' · ')}</span></span>
+              <b class="num">{fmtKg(set.weight_kg)} kg × {set.reps}</b>
             </div>
           ))}
         </section>
       )}
 
+      <SessionMuscles perExercise={s.perExercise} />
+
       {s.perExercise.filter((p) => p.sets.length > 0 || w.status !== 'done').map((p) => (
         <section key={p.we.id} class="card">
           <div class="row between">
-            <button class="ex-link" onClick={() => p.exercise && go(`/exercise/${p.exercise.id}`)}>{p.exercise?.name} <span class="chev">›</span></button>
+            <button class="ex-link" onClick={() => p.exercise && go(`/exercise/${p.exercise.id}`)}>{p.exercise?.name} <IconChevron size={16} class="chev" /></button>
             {p.avgRest != null && <span class="muted small">avg rest {fmtClock(p.avgRest)}</span>}
           </div>
           {p.we.note && <div class="muted small row gap-sm"><IconEdit size={13} /> {p.we.note}</div>}
@@ -163,7 +173,7 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
       ))}
 
       {w.status === 'done' && s.perExercise.some((p) => !p.sets.length) && (
-        <p class="muted small">Not done: {s.perExercise.filter((p) => !p.sets.length).map((p) => p.exercise?.name).join(', ')}</p>
+        <p class="fine group-foot">Not done: {s.perExercise.filter((p) => !p.sets.length).map((p) => p.exercise?.name).join(', ')}</p>
       )}
       <button class="btn primary block" onClick={() => go('/')}>Done</button>
       {w.status === 'done' && (
@@ -179,12 +189,38 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
     <div class="stat">
-      <div class="stat-value">{value}</div>
-      <div class="muted small">{label}</div>
+      <div class="stat-value">{value}{unit && <span class="stat-unit"> {unit}</span>}</div>
+      <div class="stat-label">{label}</div>
     </div>
+  );
+}
+
+type PerExercise = Awaited<ReturnType<typeof summarize>> extends infer T ? T extends { perExercise: infer P } ? P : never : never;
+
+/** Body map of what this session trained: each working set adds its exercise's muscle weights. */
+function SessionMuscles({ perExercise }: { perExercise: PerExercise }) {
+  const values: MuscleMap = {};
+  for (const p of perExercise) {
+    const m = resolveMuscles(p.exercise);
+    const n = p.sets.filter((x) => !x.is_warmup).length;
+    if (!n) continue;
+    for (const [k, w] of Object.entries(m) as [Muscle, number][]) values[k] = (values[k] ?? 0) + w * n;
+  }
+  const top = (Object.entries(values) as [Muscle, number][]).filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]);
+  if (!top.length) return null;
+  const max = Math.max(3, top[0][1]);
+  return (
+    <section class="card">
+      <div class="section-head"><span class="section-head-title" style={{ color: 'var(--c-muscle)' }}>Muscles worked</span></div>
+      <BodyMap values={values} max={max} label="Muscles worked this session" />
+      <div class="muscle-chips">
+        {top.slice(0, 6).map(([m, v]) => <span key={m} class="tag muted-tag">{muscleLabel(m)} <b class="num">{Math.round(v * 10) / 10}</b></span>)}
+      </div>
+      <p class="fine">Sets per muscle, counting half for muscles an exercise works less.</p>
+    </section>
   );
 }
 

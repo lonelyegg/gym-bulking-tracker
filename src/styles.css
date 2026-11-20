@@ -326,7 +326,7 @@ button.group-row:active { background: var(--surface-2); }
 .ex-head { display: flex; align-items: flex-start; gap: 6px; }
 .ex-title { flex: 1; text-align: left; padding: 2px 4px; font-size: 17px; color: var(--text); }
 .ex-title .muted { color: var(--muted); font-size: 13px; }
-.hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: #b9f3e8; background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: 10px; padding: 8px 10px; margin: 8px 2px; }
+.hint { display: flex; align-items: flex-start; gap: 8px; line-height: 1.35; font-size: 13px; color: #b9f3e8; background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: 10px; padding: 8px 10px; margin: 8px 2px; }
 .note { width: 100%; margin: 6px 0; min-height: 44px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 16px; resize: vertical; }
 
 .set-grid { display: grid; grid-template-columns: 34px minmax(58px, 1fr) 64px 50px 42px 50px; gap: 5px; align-items: center; position: relative; }
@@ -351,12 +351,30 @@ button.group-row:active { background: var(--surface-2); }
 .add-ex { margin-top: 14px; min-height: 54px; border: 1px dashed rgba(255,255,255,.18); background: transparent; color: var(--accent); }
 
 /* ---------- summary ---------- */
-.summary-hero { --c: #8b93a7; display: flex; gap: 14px; align-items: center; padding: 16px; border-radius: 18px; background: linear-gradient(135deg, color-mix(in srgb, var(--c) 28%, var(--surface)), var(--surface) 75%); }
+.summary-hero { --c: #8b93a7; padding: 18px 16px 14px; border-radius: var(--r-xl); border: 1px solid color-mix(in srgb, var(--c) 30%, var(--border));
+  background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--c) 30%, transparent), transparent 60%), var(--surface); margin-bottom: 12px; }
+.summary-top { display: flex; gap: 14px; align-items: center; }
+.summary-kicker { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.summary-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+.summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.summary-stats .stat { background: none; border: 0; border-radius: 0; padding: 0 6px; text-align: center; }
+.summary-stats .stat + .stat { border-left: 1px solid var(--border); }
+.summary-stats .stat-value { font-size: 19px; }
+.stat-unit { font-size: 12px; color: var(--muted); font-weight: 600; }
+.stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.pr-card { background: linear-gradient(160deg, color-mix(in srgb, var(--gold) 14%, var(--surface)), var(--surface) 60%); }
+.pr-card-head { display: flex; gap: 12px; align-items: center; margin-bottom: 6px; }
+.pr-medal { width: 38px; height: 38px; border-radius: 12px; background: var(--gold); color: #3a2a00; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pr-card-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.muscle-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.muted-tag { background: var(--surface-2); color: var(--text); }
+.muted-tag b { color: var(--c-muscle); margin-left: 2px; }
+.ex-link { display: inline-flex; align-items: center; gap: 2px; }
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
 .stat-grid.three { grid-template-columns: 1fr 1fr 1fr; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
 .stat-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.pr-card { border-color: color-mix(in srgb, var(--gold) 50%, var(--border)); }
+.pr-card { border-color: color-mix(in srgb, var(--gold) 45%, var(--border)); }
 .summary-set { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
 .summary-set:first-of-type { border-top: 0; }
 .setno-sm { width: 22px; color: var(--muted); font-weight: 700; text-align: center; }
@@ -646,3 +664,23 @@ button.group-row:active { background: var(--surface-2); }
 .form .segmented button { flex: 1; height: 36px; }
 .form-head { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: .01em; padding-top: 14px; margin-top: 4px; border-top: 1px solid var(--border); }
 .form > .form-head:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+
+/* workout */
+.wk-progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: transparent; }
+.wk-progress i { display: block; height: 100%; background: var(--accent); border-radius: 0 2px 2px 0; box-shadow: 0 0 10px var(--accent); transition: width .35s cubic-bezier(.2,.8,.2,1); }
+.hint-icon { flex-shrink: 0; margin-top: 1px; opacity: .9; }
+.hint .link { align-self: center; }
+.ex-card { transition: border-color .2s, opacity .2s; }
+.ex-card.current { border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent), var(--shadow); }
+.ex-card.all-done .ex-title .muted { opacity: .7; }
+.ex-name { display: inline-flex; align-items: center; gap: 8px; }
+.ex-done { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ex-done .icon { stroke-width: 3; }
+.set-row.next .check { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent); }
+.set-row.next .cell.setno { color: var(--accent); }
+.check .icon { stroke-width: 2.6; }
+.add-set { color: var(--accent); margin-top: 4px; }
+.timer-panel .timer-bar { height: 8px; border-radius: 4px; }
+.timer-panel .timer-bar > div { background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 4px; }
+.timer-actions .btn { background: var(--surface-3); border-radius: 14px; font-weight: 650; }
+.summary-stats .stat-value { white-space: nowrap; }

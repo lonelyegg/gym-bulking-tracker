@@ -47,3 +47,6 @@ export const IconList = ({ size = 16, class: c }: P) => base(size, c, <path d="M
 export const IconStore = ({ size = 16, class: c }: P) => base(size, c, [<path d="M3 9l1.5-5h15L21 9" />, <path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8" />]);
 export const IconSmartphone = ({ size = 16, class: c }: P) => base(size, c, [<rect x="6" y="2.5" width="12" height="19" rx="3" />, <path d="M11 18h2" />]);
 export const IconHeart = ({ size = 16, class: c }: P) => base(size, c, <path d="M12 20s-7-4.4-9-9a4.8 4.8 0 0 1 9-3 4.8 4.8 0 0 1 9 3c-2 4.6-9 9-9 9z" />);
+export const IconMore = ({ size = 22, class: c }: P) => (
+  <svg class={`icon ${c ?? ''}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" /></svg>
+);
